@@ -1,0 +1,4 @@
+__pycache__/
+sql_scripts/
+.env
+anki_words
