@@ -8,7 +8,7 @@ from aiogram.contrib.fsm_storage.memory import MemoryStorage
 from aiogram.dispatcher import FSMContext
 from aiogram.dispatcher.filters.state import State, StatesGroup
 # from aiogram.dispatcher.filters import Text
-from sqlite import db_start, add_access, get_users_w_access, create_profile, insert_words, select_words, delete_word, cards, update_remind_date, words_num
+from sqlite import db_start, add_access, get_users_w_access, create_profile, insert_words, select_words, delete_word, delete_all_words, cards, update_remind_date, words_num
 
 logging.basicConfig(level=logging.INFO)
 
@@ -23,13 +23,17 @@ MSG_HELP = """Коменды:
 /help - вывести список команд
 /my_words - вывести последние 15 сохраненных слов
 /my_words_num - вывести количество сохраненных слов
-/delete - включить режим удаления слово
 /cards - включить режим карточек (режим напоминания слов)
+/delete - включить режим удаления слов
+/delete_all - удаление всех слов
 /cancel - выход из любого режима"""
 MSG_START = MSG + "\n\n" + MSG_HELP
 
 class FSMDelete(StatesGroup):
     word_for_delete = State()
+
+class FSMDeleteAll(StatesGroup):
+    delete_all = State()
 
 class FSMCard(StatesGroup):
     word_for_reminder = State()
@@ -177,7 +181,7 @@ async def cancel_handler(message: types.Message, state: FSMContext, *args, **kwa
     if current_state is None:
         await message.reply("Что отменить? Ничего и не происходит :)", reply=False)
         return
-    elif current_state == 'FSMDelete:word_for_delete':
+    elif current_state in ['FSMDelete:word_for_delete','FSMDeleteAll:delete_all']:
         answer_message = "Хорошо, не будем удалять слова"
     elif current_state == 'FSMCard:word_for_reminder':
         answer_message = "Вышел из режима карточек"
@@ -223,6 +227,28 @@ async def load_word_for_delete(message: types.Message, state: FSMContext, *args,
         data['word_for_delete'] = message.text
         
     answer_message = await delete_word(user_id, state)
+    await state.finish()
+    await message.reply(answer_message)
+
+
+# Удаление всех слов
+@dp.message_handler(commands=['delete_all'], state=None)
+@users_access
+async def delete_all(message: types.Message, *args, **kwargs):
+    user_id = message.from_user.id
+    logging.info(f'Удаление всех слов | {user_id=}, {time.asctime()}')
+    await FSMDeleteAll.delete_all.set()
+    answer_message = "Чтобы удалить все слова введи еще раз - /delete_all\n\nДля отмены - /cancel"
+    await message.reply(answer_message, reply=False)
+
+# Ловим подтверждение, что нужно удалить все слова
+@dp.message_handler(commands=['delete_all'], state=FSMDeleteAll.delete_all)
+@users_access
+async def delete_all_again(message: types.Message, state: FSMContext, *args, **kwargs):
+    user_id = message.from_user.id
+    logging.info(f'Все слова удалены | {user_id=}, {time.asctime()}')
+        
+    answer_message = await delete_all_words(user_id)
     await state.finish()
     await message.reply(answer_message)
 

@@ -176,6 +176,20 @@ async def delete_word(user_id: str, state) -> str:
     return message
 
 
+# Удаление всех слов пользователя
+async def delete_all_words(user_id: str) -> str:
+    if not profile_exists(user_id):
+        message = "У тебя еще нет сохраненных слов"
+    else:
+        query = """DELETE 
+                    FROM words 
+                    WHERE user_id == '{key}'"""
+        cur.execute(query.format(key=user_id))
+        db.commit()
+        message = "Все слова удалил!"
+    return message
+
+
 # Вывод слов для повторения
 def cards(user_id: str) -> list:
     query = """SELECT word_id

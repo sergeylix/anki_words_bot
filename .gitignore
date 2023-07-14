@@ -1,5 +1,6 @@
 __pycache__/
 sql_scripts/
+export/
 .env
 .venv
 anki_words
