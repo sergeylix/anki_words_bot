@@ -7,14 +7,20 @@ from aiogram import Bot, Dispatcher, executor, types, filters
 from aiogram.contrib.fsm_storage.memory import MemoryStorage
 from aiogram.dispatcher import FSMContext
 from aiogram.dispatcher.filters.state import State, StatesGroup
-# from aiogram.dispatcher.filters import Text
 from sqlite import db_start, add_access, get_users_w_access, create_profile, insert_words, select_words, delete_word, delete_all_words, cards, update_remind_date, words_num
 
 logging.basicConfig(level=logging.INFO)
 
-# Для работы с переменными окружения
 load_dotenv()
+
+storage = MemoryStorage()
+
+PROXY_URL = ""
 TOKEN = os.getenv('TOKEN')
+
+bot = Bot(token=TOKEN, proxy=PROXY_URL)
+dp = Dispatcher(bot=bot, storage=storage)
+
 
 MSG = """Давай запоминать перевод слов.\n
 Напиши слово, потом знак равно '=', и затем перевод. И я сохраню слово в твоей базе слов.
@@ -38,11 +44,6 @@ class FSMDeleteAll(StatesGroup):
 class FSMCard(StatesGroup):
     word_for_reminder = State()
 
-
-storage = MemoryStorage()
-
-bot = Bot(token=TOKEN)
-dp = Dispatcher(bot=bot, storage=storage)
 
 users_w_access = [] # список пользователей с доступами
 async def on_startup(_):
