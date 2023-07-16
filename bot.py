@@ -34,6 +34,12 @@ MSG_HELP = """Коменды:
 /delete_all - удаление всех слов
 /cancel - выход из любого режима"""
 MSG_START = MSG + "\n\n" + MSG_HELP
+MSG_AUTH_HELP = """Команды доступные только автору:
+/auth - просмотр списка команд автора
+/access <user_id> - выдача доступа
+/block <user_id> - блокировка доступа
+/access_request - запросить доступ (доступно всем)
+"""
 
 class FSMDelete(StatesGroup):
     word_for_delete = State()
@@ -164,11 +170,21 @@ async def start_hendler(message: types.Message, *args, **kwargs):
 # Хэлп
 @dp.message_handler(commands=['help'])
 @users_access
-async def start_hendler(message: types.Message, *args, **kwargs):
+async def help_hendler(message: types.Message, *args, **kwargs):
     user_id = message.from_user.id
     logging.info(f'Хэлп | {user_id=} {time.asctime()}')
 
     await bot.send_message(user_id, MSG_HELP)
+
+
+# Просмотр команд для автора
+@dp.message_handler(commands=['auth'])
+@auth
+async def help_auth_hendler(message: types.Message, *args, **kwargs):
+    user_id = message.from_user.id
+    logging.info(f'Хэлп для автора | {user_id=} {time.asctime()}')
+
+    await bot.send_message(user_id, MSG_AUTH_HELP)
 
 
 # Выход из состояний
