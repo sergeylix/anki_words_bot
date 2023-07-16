@@ -1,4 +1,7 @@
 from datetime import datetime, timedelta
+import time
+import os
+import pandas as pd
 import sqlite3 as sq
 
 from fasttext.FastText import _FastText
@@ -207,6 +210,23 @@ def cards(user_id: str) -> list:
         rev.append(rev_card)
     users_cards = users_cards + rev
     return users_cards
+
+
+# Скачать все сохраненные слова
+async def download_csv(user_id: str) -> str:
+    query = """SELECT word_eng, word_rus, created_at, reminder_date
+                FROM words
+                WHERE user_id == '{key}'
+                ORDER BY created_at dESC"""
+
+    script_dir = os.path.dirname(__file__)
+    rel_path = f'tmp/id_{user_id}_{time.strftime("%Y%m%d_%H%M%S")}_UTF8.csv'
+    abs_file_path = os.path.join(script_dir, rel_path)
+
+    df = pd.read_sql(query.format(key=user_id), db)
+    df.to_csv(abs_file_path, sep=';', index=False, encoding='utf-8')
+
+    return abs_file_path
 
 
 # Обновление даты для повторения

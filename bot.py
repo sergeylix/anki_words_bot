@@ -7,7 +7,9 @@ from aiogram import Bot, Dispatcher, executor, types, filters
 from aiogram.contrib.fsm_storage.memory import MemoryStorage
 from aiogram.dispatcher import FSMContext
 from aiogram.dispatcher.filters.state import State, StatesGroup
-from sqlite import db_start, add_access, get_users_w_access, create_profile, insert_words, select_words, delete_word, delete_all_words, cards, update_remind_date, words_num
+from sqlite import db_start, add_access, get_users_w_access, create_profile,\
+    insert_words, select_words, delete_word, delete_all_words, cards, update_remind_date,\
+    words_num, download_csv
 
 logging.basicConfig(level=logging.INFO)
 
@@ -29,6 +31,7 @@ MSG_HELP = """Коменды:
 /help - вывести список команд
 /my_words - вывести последние 15 сохраненных слов
 /my_words_num - вывести количество сохраненных слов
+/download_csv - скачать все слова в csv
 /cards - включить режим карточек (режим напоминания слов)
 /delete - включить режим удаления слов
 /delete_all - удаление всех слов
@@ -292,6 +295,24 @@ async def print_my_words_num(message: types.Message, *args, **kwargs):
     logging.info(f'Выводим кол-во сохраненных слов | {user_id=}, {time.asctime()}')
     
     await message.reply(answer_message, reply=False)
+
+
+# Скачиваем все слова в csv
+@dp.message_handler(commands=['download_csv'])
+@users_access
+async def download(message: types.Message, *args, **kwargs):
+    user_id = message.from_user.id
+    logging.info(f'Скачиваем файлы для пользователя в csv | {user_id=}, {time.asctime()}')
+
+    fp = await download_csv(user_id)
+    doc = open(fp, 'rb')
+    await message.reply_document(doc)
+    doc.close()
+    if os.path.isfile(fp):
+        os.remove(fp)
+        logging.info(f'{fp} deleted. | {user_id=}, {time.asctime()}')
+    else:
+        logging.info(f'{fp} not found. | {user_id=}, {time.asctime()}')
 
 
 # Карточки для напоминания слов

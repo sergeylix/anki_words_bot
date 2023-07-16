@@ -1,6 +1,7 @@
+.venv/
 __pycache__/
 sql_scripts/
+cover/
 *.csv
 .env
-.venv
 anki_words
