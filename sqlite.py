@@ -90,8 +90,8 @@ def profile_exists(user_id: str) -> bool:
 async def add_access(users:  list, flg: int):
     for user_id in users:
         if not access_exists(user_id) and user_id.isnumeric():
-            query = """INSERT INTO access(user_id, access) VALUES(?, ?)"""
-            cur.execute(query.format(user_id, flg))
+            query = """INSERT INTO access(user_id, access) VALUES('{key}', {flg})"""
+            cur.execute(query.format(key=user_id, flg=flg))
             db.commit()
         else:
             query = """UPDATE access SET access = {flg}
