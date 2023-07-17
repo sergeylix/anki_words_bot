@@ -17,22 +17,22 @@ load_dotenv()
 
 storage = MemoryStorage()
 
-PROXY_URL = ""
+# PROXY_URL = ""
 TOKEN = os.getenv('TOKEN')
 
-bot = Bot(token=TOKEN, proxy=PROXY_URL)
+bot = Bot(token=TOKEN) #, proxy=PROXY_URL
 dp = Dispatcher(bot=bot, storage=storage)
 
 
-MSG = """Давай запоминать перевод слов.\n
-Напиши слово, потом знак равно '=', и затем перевод. И я сохраню слово в твоей базе слов.
+MSG = """Этот бот сохраняет слова и их перевод, кроме этого можно просматривать слова и вспоминать их перевод в режиме карточек.\n
+Напиши слово, затем знак равно '=', и затем перевод. И бот сохранит слово в твоей базе слов.
 Например: hello = привет"""
 MSG_HELP = """Коменды:
 /help - вывести список команд
+/cards - включить режим карточек (режим напоминания слов)
 /my_words - вывести последние 15 сохраненных слов
 /my_words_num - вывести количество сохраненных слов
 /download_csv - скачать все слова в csv
-/cards - включить режим карточек (режим напоминания слов)
 /delete - включить режим удаления слов
 /delete_all - удаление всех слов
 /cancel - выход из любого режима"""
@@ -57,11 +57,10 @@ class FSMCard(StatesGroup):
 users_w_access = [] # список пользователей с доступами
 async def on_startup(_):
     await db_start()
+    await setup_bot_commands()
 
     global users_w_access
     users_w_access = await get_users_w_access()
-    # await bot.send_message('91523724', f"{users_w_access}")
-    
 
 
 
@@ -107,6 +106,20 @@ b6 = types.InlineKeyboardButton(text='90', callback_data='remind in 90 day')
 inline_buttons_reminder.add(b3, b4, b5, b6)
 inline_buttons_reminder.row(b2)
 
+# Команды
+async def setup_bot_commands():
+    bot_commands = [
+        types.BotCommand("help", "Помощь"),
+        types.BotCommand("cards", "Карточки"),
+        types.BotCommand("my_words", "Мои слова"),
+        types.BotCommand("my_words_num", "Кол-во слов"),
+        types.BotCommand("download_csv", "Скачать слова в csv"),
+        types.BotCommand("delete", "Удалить одно слово"),
+        types.BotCommand("delete_all", "Удалит все слова"),
+        types.BotCommand("cancel", "Отмена"),
+    ]
+    await bot.set_my_commands(bot_commands)
+
 
 # Запрос доступа
 @dp.message_handler(commands=['access_request'])
@@ -116,7 +129,7 @@ async def access_request(message: types.Message, *args, **kwargs):
     user_full_name = message.from_user.full_name
 
     logging.info(f'ЗАПРОС ДОСТУПА ДЛЯ {user_id} ! | {user_id=}, {username=}, {user_full_name=} {time.asctime()}')
-    await message.reply('Запрос отправлен. Ожидайте уведомление...', reply=False)
+    await message.reply('Запрос отправлен. Ожидайте уведомления...', reply=False)
     await bot.send_message('91523724', f"ЗАПРОС ДОСТУПА ДЛЯ:\n{user_id} | @{username} | {user_full_name}\n\nЧтоб открыть доступ - /access {user_id}\nЧтобы заблокировать - /block {user_id}") 
 
 
