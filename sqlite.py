@@ -201,7 +201,7 @@ def cards(user_id: str) -> list:
                 WHERE user_id == '{key}'
                 AND reminder_date < strftime('%Y-%m-%d %H:%M:%S','now')
                 ORDER BY reminder_date
-                LIMIT 25"""
+                LIMIT 10"""
     users_cards = cur.execute(query.format(key=user_id)).fetchall()
     rev = []
     rev_card = ()

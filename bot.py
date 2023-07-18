@@ -343,7 +343,7 @@ async def load_cards(message: types.Message, state: FSMContext, *args, **kwargs)
         await message.reply(answer_message, reply=False)
     else:
         total_num = len(users_cards)
-        answer_message = "Режим карточек включен.\nТебе будут показываться слово и кнопка для просмотра перевода.\nА затем выбери через сколько дней напомнить слово еще раз:\n1 - через 1 день\n7 - через 7 дней\n30 - через 30 дней\n90 - через 90 дней\n\nДля отмены - /cancel"
+        answer_message = "Режим карточек включен.\nТебе будут показываться 10 слов + 10 их переводов.\nДля каждого слова можно посмотреть перевод, а затем выбрать через сколько дней напомнить слово еще раз:\n1 - через 1 день\n7 - через 7 дней\n30 - через 30 дней\n90 - через 90 дней\n\nДля отмены - /cancel"
         await message.reply(answer_message, reply=False)
 
         word_for_reminder = users_cards[index_num][1]
@@ -395,7 +395,7 @@ async def next_cards(callback_query: types.CallbackQuery, state: FSMContext, *ar
 
         index_num += 1
         if index_num > total_num - 1:
-            answer_message = "На сегодня больше нет слов. Так держать!\nВышел из режима карточек."
+            answer_message = "Слова закончились. Так держать!\nВышел из режима карточек."
             await state.finish()
             await callback_query.message.answer(answer_message)
         else:
