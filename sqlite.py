@@ -124,7 +124,7 @@ def select_words(user_id: str) -> str:
     message = ""
     clients_words = ""
     if not profile_exists(user_id):
-        message = "У тебя еще нет сохраненных слов"
+        message = "Еще нет сохраненных слов"
     else:
         query = """SELECT word_eng, word_rus
                     FROM words 
@@ -134,7 +134,7 @@ def select_words(user_id: str) -> str:
         for word in cur.execute(query.format(key=user_id)).fetchall():
             clients_words = clients_words + word[0] + " | " + word[1] + "\n"
         if clients_words == "":
-             message = "У тебя еще нет сохраненных слов"
+             message = "Еще нет сохраненных слов"
         else:
             message = f"Твои последние добавленные 15 слов:\n\n{clients_words}"
     return message
@@ -144,16 +144,13 @@ def select_words(user_id: str) -> str:
 def words_num(user_id: str) -> str:
     message = ""
     if not profile_exists(user_id):
-        message = "У тебя еще нет сохраненных слов"
+        message = "Еще нет сохраненных слов"
     else:
-        query = """SELECT count(distinct word_eng)
+        query = """SELECT count(word_id)
                     FROM words 
                     WHERE user_id == '{key}'"""
         words_num = cur.execute(query.format(key=user_id)).fetchone()[0]
-        # if words_num == "":
-        #      message = "У тебя еще нет сохраненных слов"
-        # else:
-        message = f"У тебя сохранено слов: {words_num}"
+        message = f"Сохранено слов: {words_num}"
     return message
 
 
@@ -181,7 +178,7 @@ async def delete_word(user_id: str, state) -> str:
 # Удаление всех слов пользователя
 async def delete_all_words(user_id: str) -> str:
     if not profile_exists(user_id):
-        message = "У тебя еще нет сохраненных слов"
+        message = "Еще нет сохраненных слов"
     else:
         query = """DELETE 
                     FROM words 
@@ -224,6 +221,7 @@ async def download_csv(user_id: str) -> str:
     abs_file_path = os.path.join(script_dir, rel_path)
 
     df = pd.read_sql(query.format(key=user_id), db)
+    df.insert(0, 'row_number', range(1, 1 + len(df)))
     df.to_csv(abs_file_path, sep=';', index=False, encoding='utf-8')
 
     return abs_file_path
