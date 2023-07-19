@@ -9,7 +9,7 @@ from aiogram.dispatcher import FSMContext
 from aiogram.dispatcher.filters.state import State, StatesGroup
 from sqlite import db_start, add_access, get_users_w_access, create_profile,\
     insert_words, select_words, delete_word, delete_all_words, cards, update_remind_date,\
-    words_num, select_duplicate, download_csv
+    words_num, select_duplicate, download_csv, any_query
 
 logging.basicConfig(level=logging.INFO)
 
@@ -43,6 +43,7 @@ MSG_AUTH_HELP = """Команды доступные только автору:
 /access <user_id> - выдача доступа
 /block <user_id> - блокировка доступа
 /access_request - запросить доступ (доступно всем)
+/query - режим выполнения SQL скриптов
 """
 
 class FSMDelete(StatesGroup):
@@ -53,6 +54,9 @@ class FSMDeleteAll(StatesGroup):
 
 class FSMCard(StatesGroup):
     word_for_reminder = State()
+
+class FSMQuery(StatesGroup):
+    execute_query = State()
 
 
 users_w_access = [] # список пользователей с доступами
@@ -432,6 +436,28 @@ async def duplicates(message: types.Message, *args, **kwargs):
     logging.info(f'Вывод дублирующихся слов | {user_id=}, {time.asctime()}')
 
     await message.reply(answer_message, reply=False)
+
+
+# Выполнить любой SQL запрос
+@dp.message_handler(commands=['query'], state=None)
+@auth
+async def execute_query(message: types.Message, *args, **kwargs):
+    user_id = message.from_user.id
+    logging.info(f'Переход в режим выполнения SQL запросов | {user_id=}, {time.asctime()}')
+    await FSMQuery.execute_query.set()
+    answer_message = "Напиши SQL запрос без переноса строк. После запроса автоматически добавится limit 20.\n\nДля отмены - /cancel"
+    await message.reply(answer_message, reply=False)
+
+# Ловим SQL запрос
+@dp.message_handler(state=FSMQuery.execute_query)
+@auth
+async def execute_query(message: types.Message, state: FSMContext, *args, **kwargs):
+    user_id = message.from_user.id
+    logging.info(f'Выполнение запроса | {user_id=}, {time.asctime()}')
+    query = message.text
+    answer_message = await any_query(query)
+    await state.finish()
+    await message.reply(answer_message)
 
 
 

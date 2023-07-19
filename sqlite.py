@@ -136,7 +136,7 @@ async def select_words(user_id: str) -> str:
         if clients_words == "":
              message = "Еще нет сохраненных слов"
         else:
-            message = f"Твои последние добавленные 15 слов:\n\n{clients_words}"
+            message = f"15 последних добавленных слов:\n\n{clients_words}"
     return message
 
 
@@ -264,3 +264,21 @@ async def select_duplicate(user_id: str) -> str:
     else:
         message = f"Повторяющиеся слова:\n\n{duplicates}"
     return message
+
+
+# Любой запрос к БД через ТГ сообщение
+async def any_query(query:str) -> str:
+    output = ""
+    query = query + '\n limit 20'
+    try:
+        for row in cur.execute(query).fetchall():
+            for count, value in enumerate(row):
+                if count == 0:
+                    output = output + str(row[count])
+                else:
+                    output = output + ' - ' + str(row[count])
+            output = output + "\n"
+        messege = f"Результат запроса:\n\n{output}"
+    except:
+        messege = "Ошибка в запросе"
+    return messege
