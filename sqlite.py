@@ -120,7 +120,7 @@ async def insert_words(user_id: str, user_message: str):
 
 
 # Вывод последних добавленных слов
-def select_words(user_id: str) -> str:
+async def select_words(user_id: str) -> str:
     message = ""
     clients_words = ""
     if not profile_exists(user_id):
@@ -141,7 +141,7 @@ def select_words(user_id: str) -> str:
 
 
 # Кол-во сохраненных слов
-def words_num(user_id: str) -> str:
+async def words_num(user_id: str) -> str:
     message = ""
     if not profile_exists(user_id):
         message = "Еще нет сохраненных слов"
@@ -246,3 +246,21 @@ async def update_remind_date(user_id: str, word_id: str, remind_in: str):
     update_date = (datetime.utcnow() + timedelta(days = remind_in_days))
     cur.execute(query.format(update_date=update_date, key=user_id, word_id=word_id))
     db.commit()
+
+
+# Вывести дублирующиеся слова
+async def select_duplicate(user_id: str) -> str:
+    message = ""
+    duplicates = ""
+    query = """SELECT word_eng, count(word_eng) as num
+                FROM words
+                WHERE user_id == '{key}'
+                GROUP BY word_eng
+                HAVING count(word_eng) > 1"""
+    for word in cur.execute(query.format(key=user_id)).fetchall():
+        duplicates = duplicates + str(word[0]) + " - " + str(word[1]) + "\n"
+    if duplicates == "":
+        message = "Нет повторяющихся слов."
+    else:
+        message = f"Повторяющиеся слова:\n\n{duplicates}"
+    return message

@@ -9,7 +9,7 @@ from aiogram.dispatcher import FSMContext
 from aiogram.dispatcher.filters.state import State, StatesGroup
 from sqlite import db_start, add_access, get_users_w_access, create_profile,\
     insert_words, select_words, delete_word, delete_all_words, cards, update_remind_date,\
-    words_num, download_csv
+    words_num, select_duplicate, download_csv
 
 logging.basicConfig(level=logging.INFO)
 
@@ -32,6 +32,7 @@ MSG_HELP = """Коменды:
 /cards - включить режим карточек (режим напоминания слов)
 /my_words - вывести последние 15 сохраненных слов
 /my_words_num - вывести количество сохраненных слов
+/duplicates - вывести дублирующиеся слова
 /download_csv - скачать все слова в csv
 /delete - включить режим удаления слов
 /delete_all - удаление всех слов
@@ -109,14 +110,15 @@ inline_buttons_reminder.row(b2)
 # Команды
 async def setup_bot_commands():
     bot_commands = [
-        types.BotCommand("help", "Помощь"),
-        types.BotCommand("cards", "Карточки"),
-        types.BotCommand("my_words", "Мои слова"),
-        types.BotCommand("my_words_num", "Кол-во слов"),
-        types.BotCommand("download_csv", "Скачать слова в csv"),
-        types.BotCommand("delete", "Удалить одно слово"),
-        types.BotCommand("delete_all", "Удалит все слова"),
+        types.BotCommand("cards", "Режим карточек"),
+        types.BotCommand("my_words", "Вывести 15 последних слова"),
+        types.BotCommand("my_words_num", "Вывести кол-во слов"),
+        types.BotCommand("duplicates", "Вывести дублирующиеся слова"),
+        types.BotCommand("download_csv", "Скачать все слова в csv"),
+        types.BotCommand("delete", "Режим удаления одного слова"),
+        types.BotCommand("delete_all", "Режим удаления всех слов"),
         types.BotCommand("cancel", "Отмена"),
+        types.BotCommand("help", "Помощь"),
     ]
     await bot.set_my_commands(bot_commands)
 
@@ -291,7 +293,7 @@ async def delete_all_again(message: types.Message, state: FSMContext, *args, **k
 @users_access
 async def print_my_words(message: types.Message, *args, **kwargs):
     user_id = message.from_user.id
-    answer_message = select_words(user_id)
+    answer_message = await select_words(user_id)
 
     logging.info(f'Выводим список сохраненных слов | {user_id=}, {time.asctime()}')
     
@@ -303,7 +305,7 @@ async def print_my_words(message: types.Message, *args, **kwargs):
 @users_access
 async def print_my_words_num(message: types.Message, *args, **kwargs):
     user_id = message.from_user.id
-    answer_message = words_num(user_id)
+    answer_message = await words_num(user_id)
 
     logging.info(f'Выводим кол-во сохраненных слов | {user_id=}, {time.asctime()}')
     
@@ -419,6 +421,17 @@ async def cancel_cards(callback_query: types.CallbackQuery, state: FSMContext, *
     await state.finish()
     await callback_query.message.answer(answer_message)
 
+
+# Вывести дублирующиеся слова
+@dp.message_handler(commands=['duplicates'])
+@users_access
+async def duplicates(message: types.Message, *args, **kwargs):
+    user_id = message.from_user.id
+    answer_message = await select_duplicate(user_id)
+
+    logging.info(f'Вывод дублирующихся слов | {user_id=}, {time.asctime()}')
+
+    await message.reply(answer_message, reply=False)
 
 
 
