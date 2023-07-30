@@ -48,8 +48,9 @@ async def db_start():
     query = """CREATE TABLE IF NOT EXISTS words(
                     word_id INTEGER PRIMARY KEY AUTOINCREMENT,
                     user_id TEXT,
-                    word_eng TEXT,
-                    word_rus TEXT,
+                    word TEXT,
+                    translation TEXT,
+                    category TEXT,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
                     reminder_date TIMESTAMP,
                     FOREIGN KEY (user_id) REFERENCES profile(user_id))"""
@@ -109,13 +110,19 @@ async def create_profile(user_id: str, full_name: str):
 
 # Добавление слова
 async def insert_words(user_id: str, user_message: str):
-    words = [word.strip() for word in user_message.split('=', 1)]
+    # words = [word.strip() for word in user_message.split('=', 1)]
+    words = [word.strip() for word in user_message.split('=', 2)]
+    if len(words) == 2:
+        words.append('')
     if define_language(words[0]) == '__label__en' and define_language(words[1]) == '__label__en':
         pass
     elif define_language(words[0]) != '__label__en' and define_language(words[1]) == '__label__en':
-        words = [words[1], words[0]]
+        words = [words[1], words[0], words[2]]
     reminder_date = (datetime.utcnow() + timedelta(days=0))
-    cur.execute("INSERT INTO words(user_id, word_eng, word_rus, reminder_date) VALUES(?, ?, ?, ?)", (user_id, words[0], words[1], reminder_date))
+    if not words[2]:
+        cur.execute("INSERT INTO words(user_id, word, translation, reminder_date) VALUES(?, ?, ?, ?)", (user_id, words[0], words[1], reminder_date))
+    else:
+        cur.execute("INSERT INTO words(user_id, word, translation, category, reminder_date) VALUES(?, ?, ?, ?, ?)", (user_id, words[0], words[1], words[2], reminder_date))
     db.commit()
 
 
@@ -126,13 +133,16 @@ async def select_words(user_id: str) -> str:
     if not profile_exists(user_id):
         message = "Еще нет сохраненных слов"
     else:
-        query = """SELECT word_eng, word_rus
+        query = """SELECT word, translation, category
                     FROM words 
                     WHERE user_id == '{key}' 
                     ORDER BY created_at DESC 
                     LIMIT 15"""
         for word in cur.execute(query.format(key=user_id)).fetchall():
-            clients_words = clients_words + word[0] + " | " + word[1] + "\n"
+            if not word[2]:
+                clients_words = clients_words + word[0] + " | " + word[1] + "\n"
+            else:
+                clients_words = clients_words + word[0] + " | " + word[1] + " (" +  word[2] + ")" +"\n"
         if clients_words == "":
              message = "Еще нет сохраненных слов"
         else:
@@ -160,7 +170,7 @@ async def delete_word(user_id: str, state) -> str:
         query = """SELECT 1 
                     FROM words 
                     WHERE user_id == '{key}'
-                    AND (word_rus == '{word}' OR word_eng == '{word}')"""
+                    AND (translation == '{word}' OR word == '{word}')"""
         word_for_del = cur.execute(query.format(key=user_id, word=data['word_for_delete'])).fetchone()
         if not word_for_del:
             message = "Такого слова нет. Вышел из режима удаления.\nУдалим другое слово? - /delete"
@@ -168,7 +178,7 @@ async def delete_word(user_id: str, state) -> str:
             query = """DELETE 
                         FROM words 
                         WHERE user_id == '{key}'
-                        AND (word_rus == '{word}' OR word_eng == '{word}')"""
+                        AND (translation == '{word}' OR word == '{word}')"""
             cur.execute(query.format(key=user_id, word=data['word_for_delete']))
             db.commit()
             message = "Удалил! И вышел из режима удаления.\nУдалим другое слово? - /delete\n\nПоследние 15 слов - /my_words\nРежим карточек - /cards"
@@ -192,8 +202,8 @@ async def delete_all_words(user_id: str) -> str:
 # Вывод слов для повторения
 def cards(user_id: str) -> list:
     query = """SELECT word_id
-                    , word_eng
-                    , word_rus
+                    , word
+                    , translation
                 FROM words 
                 WHERE user_id == '{key}'
                 AND reminder_date < strftime('%Y-%m-%d %H:%M:%S','now')
@@ -211,7 +221,7 @@ def cards(user_id: str) -> list:
 
 # Скачать все сохраненные слова
 async def download_csv(user_id: str) -> str:
-    query = """SELECT word_eng, word_rus, created_at, reminder_date
+    query = """SELECT word, translation, category, created_at, reminder_date
                 FROM words
                 WHERE user_id == '{key}'
                 ORDER BY created_at dESC"""
@@ -252,17 +262,24 @@ async def update_remind_date(user_id: str, word_id: str, remind_in: str):
 async def select_duplicate(user_id: str) -> str:
     message = ""
     duplicates = ""
-    query = """SELECT word_eng, count(word_eng) as num
+    query = """WITH duplicates as (
+                SELECT word,
+	                CASE WHEN category IS NULL THEN 'empty' ELSE category END AS category
                 FROM words
                 WHERE user_id == '{key}'
-                GROUP BY word_eng
-                HAVING count(word_eng) > 1"""
+                )
+                SELECT word,
+	                COUNT(word) as num,
+	                TRIM(REPLACE(GROUP_CONCAT(category),',',', ')) as categories
+                FROM duplicates
+                GROUP BY word
+                HAVING count(word) > 1"""
     for word in cur.execute(query.format(key=user_id)).fetchall():
-        duplicates = duplicates + str(word[0]) + " - " + str(word[1]) + "\n"
+        duplicates = duplicates + str(word[0]) + " — " + str(word[1]) + " (" + str(word[2]) + ")" + "\n"
     if duplicates == "":
         message = "Нет повторяющихся слов."
     else:
-        message = f"Повторяющиеся слова:\n\n{duplicates}"
+        message = f"Повторяющиеся слова в формате:\n<слово> — <количество повторений> (<категории>)\n\n{duplicates}"
     return message
 
 

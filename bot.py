@@ -7,6 +7,7 @@ from aiogram import Bot, Dispatcher, executor, types, filters
 from aiogram.contrib.fsm_storage.memory import MemoryStorage
 from aiogram.dispatcher import FSMContext
 from aiogram.dispatcher.filters.state import State, StatesGroup
+import message_texts
 from sqlite import db_start, add_access, get_users_w_access, create_profile,\
     insert_words, select_words, delete_word, delete_all_words, cards, update_remind_date,\
     words_num, select_duplicate, download_csv, any_query
@@ -23,28 +24,6 @@ TOKEN = os.getenv('TOKEN')
 bot = Bot(token=TOKEN) #, proxy=PROXY_URL
 dp = Dispatcher(bot=bot, storage=storage)
 
-
-MSG = """Этот бот сохраняет слова и их перевод, кроме этого можно просматривать слова и вспоминать их перевод в режиме карточек.\n
-Напиши слово, затем знак равно '=', и затем перевод. И бот сохранит слово в твоей базе слов.
-Например: hello = привет"""
-MSG_HELP = """Коменды:
-/help - вывести список команд
-/cards - включить режим карточек (режим напоминания слов)
-/my_words - вывести последние 15 сохраненных слов
-/my_words_num - вывести количество сохраненных слов
-/duplicates - вывести дублирующиеся слова
-/download_csv - скачать все слова в csv
-/delete - включить режим удаления слов
-/delete_all - удаление всех слов
-/cancel - выход из любого режима"""
-MSG_START = MSG + "\n\n" + MSG_HELP
-MSG_AUTH_HELP = """Команды доступные только автору:
-/auth - просмотр списка команд автора
-/access <user_id> - выдача доступа
-/block <user_id> - блокировка доступа
-/access_request - запросить доступ (доступно всем)
-/query - режим выполнения SQL скриптов
-"""
 
 class FSMDelete(StatesGroup):
     word_for_delete = State()
@@ -186,7 +165,7 @@ async def start_hendler(message: types.Message, *args, **kwargs):
 
     await create_profile(user_id, user_full_name)
     await message.reply(f'Привет, {user_name}!', reply=False)
-    await bot.send_message(user_id, MSG_START)
+    await bot.send_message(user_id, message_texts.MSG_START)
 
 
 # Хэлп
@@ -196,7 +175,7 @@ async def help_hendler(message: types.Message, *args, **kwargs):
     user_id = message.from_user.id
     logging.info(f'Хэлп | {user_id=} {time.asctime()}')
 
-    await bot.send_message(user_id, MSG_HELP)
+    await bot.send_message(user_id, message_texts.MSG_HELP)
 
 
 # Просмотр команд для автора
@@ -206,7 +185,7 @@ async def help_auth_hendler(message: types.Message, *args, **kwargs):
     user_id = message.from_user.id
     logging.info(f'Хэлп для автора | {user_id=} {time.asctime()}')
 
-    await bot.send_message(user_id, MSG_AUTH_HELP)
+    await bot.send_message(user_id, message_texts.MSG_AUTH_HELP)
 
 
 # Выход из состояний
