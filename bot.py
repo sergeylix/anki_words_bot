@@ -102,6 +102,7 @@ async def setup_bot_commands():
         types.BotCommand("delete_all", "Режим удаления всех слов"),
         types.BotCommand("cancel", "Отмена"),
         types.BotCommand("help", "Помощь"),
+        types.BotCommand("donate", "Поддержать проект")
     ]
     await bot.set_my_commands(bot_commands)
 
@@ -437,6 +438,48 @@ async def execute_query(message: types.Message, state: FSMContext, *args, **kwar
     answer_message = await any_query(query)
     await state.finish()
     await message.reply(answer_message)
+
+
+# Донат
+@dp.message_handler(commands=['donate'])
+@users_access
+async def donate_hendler(message: types.Message, *args, **kwargs):
+    user_id = message.from_user.id
+    logging.info(f'Донат | {user_id=} {time.asctime()}')
+    await bot.send_message(user_id, message_texts.MSG_DONATE_INFO)
+
+# Донат Georgian_iban
+@dp.message_handler(commands=['Georgian_iban'])
+@users_access
+async def donate_Georgian_iban_hendler(message: types.Message, *args, **kwargs):
+    user_id = message.from_user.id
+    logging.info(f'Донат Georgian_iban | {user_id=} {time.asctime()}')
+    await bot.send_message(user_id, message_texts.MSG_DONATE_Georgian_iban)
+
+# Донат BUSD_BEP20
+@dp.message_handler(commands=['BUSD_BEP20'])
+@users_access
+async def donate_BUSD_BEP20_hendler(message: types.Message, *args, **kwargs):
+    user_id = message.from_user.id
+    logging.info(f'Донат BUSD_BEP20 | {user_id=} {time.asctime()}')
+    await bot.send_message(user_id, message_texts.MSG_DONATE_BUSD_BEP20)
+
+# Донат USDT_TRC20
+@dp.message_handler(commands=['USDT_TRC20'])
+@users_access
+async def donate_USDT_TRC20_hendler(message: types.Message, *args, **kwargs):
+    user_id = message.from_user.id
+    logging.info(f'Донат USDT_TRC20 | {user_id=} {time.asctime()}')
+    await bot.send_message(user_id, message_texts.MSG_DONATE_USDT_TRC20)
+
+# Донат MSG_DONATE_USDC_ERC20
+@dp.message_handler(commands=['USDC_ERC20'])
+@users_access
+async def donate_MSG_DONATE_USDC_ERC20_hendler(message: types.Message, *args, **kwargs):
+    user_id = message.from_user.id
+    logging.info(f'Донат MSG_DONATE_USDC_ERC20 | {user_id=} {time.asctime()}')
+    await bot.send_message(user_id, message_texts.MSG_DONATE_USDC_ERC20)
+
 
 
 

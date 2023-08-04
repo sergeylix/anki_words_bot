@@ -22,3 +22,21 @@ MSG_AUTH_HELP = """Команды доступные только автору:
 /access_request - запросить доступ (доступно всем)
 /query - режим выполнения SQL скриптов
 """
+
+MSG_DONATE = """/donate - support the project!"""
+
+MSG_DONATE_INFO = """Please support the memorising words bot project:
+Patreon - https://www.patreon.com/sergeylix
+/Georgian_iban - GE44BG0000000538934249 (Sergei Likhachev)
+/BUSD_BEP20: 0xaFC0c26B0eD046c704C346c135430f132938cD9a
+/USDT_TRC20: TDC8ba6kKfZYBQbhcJ8PypsnfCoFNL74rQ
+/USDC_ERC20: 0xaFC0c26B0eD046c704C346c135430f132938cD9a
+"""
+
+MSG_DONATE_Georgian_iban = """GE44BG0000000538934249"""
+
+MSG_DONATE_BUSD_BEP20 = """0xaFC0c26B0eD046c704C346c135430f132938cD9a"""
+
+MSG_DONATE_USDT_TRC20 = """TDC8ba6kKfZYBQbhcJ8PypsnfCoFNL74rQ"""
+
+MSG_DONATE_USDC_ERC20 = """0xaFC0c26B0eD046c704C346c135430f132938cD9a"""
