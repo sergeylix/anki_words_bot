@@ -151,7 +151,7 @@ async def select_words(user_id: str) -> str:
     return message
 
 
-# Кол-во сохраненных слов
+# Кол-во сохраненных слов всего
 async def words_num(user_id: str) -> str:
     message = ""
     if not profile_exists(user_id):
@@ -162,6 +162,24 @@ async def words_num(user_id: str) -> str:
                     WHERE user_id == '{key}'"""
         words_num = cur.execute(query.format(key=user_id)).fetchone()[0]
         message = f"Сохранено слов: {words_num}"
+    return message
+
+# Кол-во сохраненных слов в группах
+async def words_in_group_num(user_id: str) -> str:
+    message = ""
+    words_in_group = ""
+    if not profile_exists(user_id):
+        message = "Еще нет сохраненных слов"
+    else:
+        query = """SELECT category
+	                    ,count(distinct a.word_id) as words_num
+                    FROM words a
+                    WHERE user_id = '{key}'
+                    GROUP BY category
+                    ORDER BY words_num DESC"""
+        for word in cur.execute(query.format(key=user_id)).fetchall():
+            words_in_group = words_in_group + str(word[0]) + " — " + str(word[1]) + "\n"
+        message = f"Сохранено слов в группах:\n{words_in_group}"
     return message
 
 
@@ -182,7 +200,7 @@ async def delete_word(user_id: str, state) -> str:
                         AND (translation == '{word}' OR word == '{word}')"""
             cur.execute(query.format(key=user_id, word=data['word_for_delete']))
             db.commit()
-            message = "Удалил! И вышел из режима удаления.\nУдалим другое слово? - /delete\n\nПоследние 15 слов - /my_words\nРежим карточек - /cards"
+            message = "Удалил! И вышел из режима удаления.\nУдалим другое слово? - /delete"
     return message
 
 
@@ -265,7 +283,7 @@ async def select_duplicate(user_id: str) -> str:
     duplicates = ""
     query = """WITH duplicates as (
                 SELECT word,
-	                CASE WHEN category IS NULL THEN 'empty' ELSE category END AS category
+	                CASE WHEN category IS NULL THEN 'None' ELSE category END AS category
                 FROM words
                 WHERE user_id == '{key}'
                 )
@@ -280,7 +298,7 @@ async def select_duplicate(user_id: str) -> str:
     if duplicates == "":
         message = message_texts.MSG_DUPLICATE_NO_WORDS
     else:
-        message = f"Повторяющиеся слова в формате:\n<слово> — <количество повторений> (<категории>)\nЕсли группа empty, значит у слова не была указана группа\n\n{duplicates}"
+        message = f"Повторяющиеся слова в формате:\n<слово> — <количество повторений> (<категории>)\nЕсли группа None, значит у слова не указана группа\n\n{duplicates}"
     return message
 
 

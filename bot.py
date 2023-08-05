@@ -10,7 +10,7 @@ from aiogram.dispatcher.filters.state import State, StatesGroup
 import message_texts
 from sqlite import db_start, add_access, get_users_w_access, create_profile,\
     insert_words, select_words, delete_word, delete_all_words, cards, update_remind_date,\
-    words_num, select_duplicate, download_csv, any_query
+    words_num, words_in_group_num, select_duplicate, download_csv, any_query
 
 logging.basicConfig(level=logging.INFO)
 
@@ -94,8 +94,9 @@ inline_buttons_reminder.row(b2)
 async def setup_bot_commands():
     bot_commands = [
         types.BotCommand("cards", "Режим карточек"),
-        types.BotCommand("my_words", "Вывести 15 последних слова"),
-        types.BotCommand("my_words_num", "Вывести кол-во слов"),
+        types.BotCommand("my_words", "Последние 15 слов"),
+        types.BotCommand("my_words_num", "Количество слов"),
+        types.BotCommand("my_words_in_groups_num", "Количество слов в группах"),
         types.BotCommand("duplicates", "Вывести дублирующиеся слова"),
         types.BotCommand("download_csv", "Скачать все слова в csv"),
         types.BotCommand("delete", "Режим удаления одного слова"),
@@ -116,7 +117,7 @@ async def access_request(message: types.Message, *args, **kwargs):
 
     logging.info(f'ЗАПРОС ДОСТУПА ДЛЯ {user_id} ! | {user_id=}, {username=}, {user_full_name=} {time.asctime()}')
     await message.reply('Запрос отправлен. Ожидайте уведомления...', reply=False)
-    await bot.send_message('91523724', f"ЗАПРОС ДОСТУПА ДЛЯ:\n{user_id} | @{username} | {user_full_name}\n\nЧтоб открыть доступ - /access {user_id}\nЧтобы заблокировать - /block {user_id}") 
+    await bot.send_message('91523724', f"ЗАПРОС ДОСТУПА ДЛЯ:\n{user_id} | @{username} | {user_full_name}\n\nЧтобы открыть доступ - /access {user_id}\nЧтобы заблокировать - /block {user_id}") 
 
 
 # Выдача доступа
@@ -203,6 +204,10 @@ async def cancel_handler(message: types.Message, state: FSMContext, *args, **kwa
     elif current_state in ['FSMDelete:word_for_delete','FSMDeleteAll:delete_all']:
         answer_message = message_texts.MSG_CANCEL_DELETE
     elif current_state == 'FSMCard:word_for_reminder':
+        async with state.proxy() as data: # достаем id часа и сообщения, чтобы скрыть инлайновую клавиатуру
+            chat_id = data['word_for_reminder']['chat_id']
+            message_id = data['word_for_reminder']['cards_send_message']["message_id"]
+        await bot.edit_message_reply_markup(chat_id = chat_id, message_id = message_id, reply_markup = None) # удаляем инлайновую клавиатуру
         answer_message = message_texts.MSG_CANCEL_REMINDER
     else:
         answer_message = message_texts.MSG_CANCEL_GENETAL
@@ -211,19 +216,34 @@ async def cancel_handler(message: types.Message, state: FSMContext, *args, **kwa
 
 
 # Добавление слова
-@dp.message_handler(regexp='.=.')
+@dp.message_handler(state="*", regexp='.=.')
 @users_access
-async def word_insert(message: types.Message, *args, **kwargs):
+async def word_insert(message: types.Message, state: FSMContext, *args, **kwargs):
     user_id = message.from_user.id
     user_full_name = message.from_user.full_name
     user_message = message.text
-    answer_message = message_texts.MSG_INSERT_WORD
-
     logging.info(f'Добавление слова | {user_id=}, {user_full_name=}, {user_message} {time.asctime()}')
     
+    answer_message = message_texts.MSG_INSERT_WORD
     await create_profile(user_id, user_full_name)
     await insert_words(user_id, user_message)
     await message.reply(answer_message, reply=False)
+
+    # выход из всех режимов, если они был включены
+    current_state = await state.get_state()
+    if current_state is not None:
+        if current_state == 'FSMCard:word_for_reminder':
+            async with state.proxy() as data: # достаем id часа и сообщения, чтобы скрыть инлайновую клавиатуру
+                chat_id = data['word_for_reminder']['chat_id']
+                message_id = data['word_for_reminder']['cards_send_message']["message_id"]
+            await bot.edit_message_reply_markup(chat_id = chat_id, message_id = message_id, reply_markup = None) # удаляем инлайновую клавиатуру
+            answer_message = message_texts.MSG_CANCEL_REMINDER
+            logging.info(f'Вышел из режима карточек | {user_id=}, {time.asctime()}')
+        elif current_state in ['FSMDelete:word_for_delete','FSMDeleteAll:delete_all']:
+            answer_message = message_texts.MSG_CANCEL_DELETE
+            logging.info(f'Вышел из режима удаления | {user_id=}, {time.asctime()}')
+        await state.finish()
+        await message.reply(answer_message, reply=False)
 
 
 # Удаление слова
@@ -284,7 +304,7 @@ async def print_my_words(message: types.Message, *args, **kwargs):
     await message.reply(answer_message, reply=False)
 
 
-# Выводим кол-во слов
+# Выводим кол-во слов всего
 @dp.message_handler(commands=['my_words_num'])
 @users_access
 async def print_my_words_num(message: types.Message, *args, **kwargs):
@@ -292,6 +312,17 @@ async def print_my_words_num(message: types.Message, *args, **kwargs):
     answer_message = await words_num(user_id)
 
     logging.info(f'Выводим кол-во сохраненных слов | {user_id=}, {time.asctime()}')
+    
+    await message.reply(answer_message, reply=False)
+
+# Выводим кол-во слов в группах
+@dp.message_handler(commands=['my_words_in_groups_num'])
+@users_access
+async def print_my_words_in_groups_num(message: types.Message, *args, **kwargs):
+    user_id = message.from_user.id
+    answer_message = await words_in_group_num(user_id)
+
+    logging.info(f'Выводим кол-во сохраненных слов в группах | {user_id=}, {time.asctime()}')
     
     await message.reply(answer_message, reply=False)
 
