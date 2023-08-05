@@ -198,14 +198,14 @@ async def cancel_handler(message: types.Message, state: FSMContext, *args, **kwa
 
     current_state = await state.get_state()
     if current_state is None:
-        await message.reply("Что отменить? Ничего и не происходит :)", reply=False)
+        await message.reply(message_texts.MSG_CANCEL, reply=False)
         return
     elif current_state in ['FSMDelete:word_for_delete','FSMDeleteAll:delete_all']:
-        answer_message = "Хорошо, не будем удалять слова"
+        answer_message = message_texts.MSG_CANCEL_DELETE
     elif current_state == 'FSMCard:word_for_reminder':
-        answer_message = "Вышел из режима карточек"
+        answer_message = message_texts.MSG_CANCEL_REMINDER
     else:
-        answer_message = "Отменил"
+        answer_message = message_texts.MSG_CANCEL_GENETAL
     await state.finish()
     await message.reply(answer_message, reply=False)
 
@@ -217,7 +217,7 @@ async def word_insert(message: types.Message, *args, **kwargs):
     user_id = message.from_user.id
     user_full_name = message.from_user.full_name
     user_message = message.text
-    answer_message = 'Записал.\nПосмотреть последние 15 слов - /my_words\nРежим карточек - /cards\nУдалить слово - /delete'
+    answer_message = message_texts.MSG_INSERT_WORD
 
     logging.info(f'Добавление слова | {user_id=}, {user_full_name=}, {user_message} {time.asctime()}')
     
@@ -233,7 +233,7 @@ async def word_delete(message: types.Message, *args, **kwargs):
     user_id = message.from_user.id
     logging.info(f'Удаление слова | {user_id=}, {time.asctime()}')
     await FSMDelete.word_for_delete.set()
-    answer_message = "Напиши слово, которое нужно удалить\n\nДля отмены - /cancel"
+    answer_message = message_texts.MSG_DELETE
     await message.reply(answer_message, reply=False)
 
 # Ловим слово для удаления
@@ -257,7 +257,7 @@ async def delete_all(message: types.Message, *args, **kwargs):
     user_id = message.from_user.id
     logging.info(f'Удаление всех слов | {user_id=}, {time.asctime()}')
     await FSMDeleteAll.delete_all.set()
-    answer_message = "Чтобы удалить все слова введи еще раз - /delete_all\n\nДля отмены - /cancel"
+    answer_message = message_texts.MSG_DELETE_ALL
     await message.reply(answer_message, reply=False)
 
 # Ловим подтверждение, что нужно удалить все слова
@@ -325,11 +325,11 @@ async def load_cards(message: types.Message, state: FSMContext, *args, **kwargs)
     index_num = 0
     users_cards = cards(user_id)
     if not users_cards:
-        answer_message = "На сегодня нет слов для повторения. Так держать!"
+        answer_message = message_texts.MSG_CARDS_NO_WORDS
         await message.reply(answer_message, reply=False)
     else:
         total_num = len(users_cards)
-        answer_message = "Режим карточек включен.\nТебе будут показываться 10 слов + 10 их переводов.\nДля каждого слова можно посмотреть перевод, а затем выбрать через сколько дней напомнить слово еще раз:\n1 - через 1 день\n7 - через 7 дней\n30 - через 30 дней\n90 - через 90 дней\n\nДля отмены - /cancel"
+        answer_message = message_texts.MSG_CARDS_INFO
         await message.reply(answer_message, reply=False)
 
         word_for_reminder = users_cards[index_num][1]
@@ -381,9 +381,12 @@ async def next_cards(callback_query: types.CallbackQuery, state: FSMContext, *ar
 
         index_num += 1
         if index_num > total_num - 1:
-            answer_message = "Слова закончились. Так держать!\nВышел из режима карточек."
+            answer_message = message_texts.MSG_CARDS_FINISH
             await state.finish()
             await callback_query.message.answer(answer_message)
+            # DONATE
+            answer_message_donate = message_texts.MSG_DONATE
+            await callback_query.message.answer(answer_message_donate)
         else:
             word_for_reminder = users_cards[index_num][1]
             cards_send_message = await bot.send_message(user_id, word_for_reminder, reply_markup=inline_buttons_translation)
@@ -401,9 +404,12 @@ async def cancel_cards(callback_query: types.CallbackQuery, state: FSMContext, *
     await callback_query.message.delete_reply_markup() # удаляем инлайновую клавиатуру
     await callback_query.answer() # завершаем коллбэк
 
-    answer_message = "Вышел из режима карточек"
+    answer_message = message_texts.MSG_CARDS_CANCEL
     await state.finish()
     await callback_query.message.answer(answer_message)
+    # DONATE
+    answer_message_donate = message_texts.MSG_DONATE
+    await callback_query.message.answer(answer_message_donate)
 
 
 # Вывести дублирующиеся слова
@@ -412,9 +418,7 @@ async def cancel_cards(callback_query: types.CallbackQuery, state: FSMContext, *
 async def duplicates(message: types.Message, *args, **kwargs):
     user_id = message.from_user.id
     answer_message = await select_duplicate(user_id)
-
     logging.info(f'Вывод дублирующихся слов | {user_id=}, {time.asctime()}')
-
     await message.reply(answer_message, reply=False)
 
 
@@ -425,7 +429,7 @@ async def execute_query(message: types.Message, *args, **kwargs):
     user_id = message.from_user.id
     logging.info(f'Переход в режим выполнения SQL запросов | {user_id=}, {time.asctime()}')
     await FSMQuery.execute_query.set()
-    answer_message = "Напиши SQL запрос без переноса строк. После запроса автоматически добавится limit 20.\n\nДля отмены - /cancel"
+    answer_message = message_texts.MSG_SQL_QUERY
     await message.reply(answer_message, reply=False)
 
 # Ловим SQL запрос
@@ -487,7 +491,7 @@ async def donate_MSG_DONATE_USDC_ERC20_hendler(message: types.Message, *args, **
 @dp.message_handler()
 @users_access
 async def echo(message: types.Message, *args, **kwargs):
-    answer_message = "Не пониманю. Может не хватает знака '='?"
+    answer_message = message_texts.MSG_COMMAND_NOT_DEFINED
     await message.answer(answer_message)
     # await message.answer(message.text)
 

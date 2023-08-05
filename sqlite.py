@@ -4,6 +4,7 @@ import os
 import pandas as pd
 import sqlite3 as sq
 
+import message_texts
 from fasttext.FastText import _FastText
 
 # Определяем язык текста
@@ -277,9 +278,9 @@ async def select_duplicate(user_id: str) -> str:
     for word in cur.execute(query.format(key=user_id)).fetchall():
         duplicates = duplicates + str(word[0]) + " — " + str(word[1]) + " (" + str(word[2]) + ")" + "\n"
     if duplicates == "":
-        message = "Нет повторяющихся слов."
+        message = message_texts.MSG_DUPLICATE_NO_WORDS
     else:
-        message = f"Повторяющиеся слова в формате:\n<слово> — <количество повторений> (<категории>)\n\n{duplicates}"
+        message = f"Повторяющиеся слова в формате:\n<слово> — <количество повторений> (<категории>)\nЕсли группа empty, значит у слова не была указана группа\n\n{duplicates}"
     return message
 
 
