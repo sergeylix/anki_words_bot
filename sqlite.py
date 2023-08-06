@@ -58,6 +58,16 @@ async def db_start():
     cur.execute(query)
     db.commit()
 
+    # Создание таблицы группами
+    query = """CREATE TABLE IF NOT EXISTS word_groups(
+                    user_id TEXT PRIMARY KEY,
+                    actual_category TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+                    update_date TIMESTAMP,
+                    FOREIGN KEY (user_id) REFERENCES profile(user_id))"""
+    cur.execute(query)
+    db.commit()
+
 
 # Получаем список пользователей с доступами
 async def get_users_w_access() -> list:
@@ -218,17 +228,105 @@ async def delete_all_words(user_id: str) -> str:
     return message
 
 
+# Последняя выбранная группа слов
+async def actual_user_group(user_id: str) -> str:
+    user_group = ""
+    query = """SELECT CASE WHEN actual_category IS NULL THEN 'None' ELSE actual_category END AS actual_category
+                FROM word_groups 
+                WHERE user_id == '{key}'"""
+    user_group = cur.execute(query.format(key=user_id)).fetchone()
+    if not user_group:
+        user_group = message_texts.MSG_CARDS_ALL_WORDS
+    else:
+        user_group = user_group[0]
+    return user_group
+
+# Все группы слов пользователя
+async def all_user_groups(user_id: str) -> dict:
+    user_groups = {'message_groups': str(),
+                   'groups': [],
+                   'min_group_num': int(), 
+                   'max_group_num': int()}
+    i = int(0)
+    query = """SELECT * FROM (
+                    SELECT '{category}' as category
+                        ,COUNT(word_id) as num
+                    FROM words
+                    WHERE user_id == '{key}'
+                    AND reminder_date < strftime('%Y-%m-%d %H:%M:%S','now')
+                )
+                UNION ALL
+                SELECT * FROM (
+                    SELECT DISTINCT category
+                        ,SUM(case when reminder_date < strftime('%Y-%m-%d %H:%M:%S','now') then 1 else 0 end) as num
+                    FROM words 
+                    WHERE user_id == '{key}'
+                    GROUP BY category
+                    ORDER BY category
+                )"""
+    for group in cur.execute(query.format(category=message_texts.MSG_CARDS_ALL_WORDS, key=user_id)).fetchall():
+        user_groups['message_groups'] = user_groups['message_groups'] + str(i) + " — " + str(group[0]) + " | " + str(group[1]) + "\n"
+        user_groups['groups'].append(str(group[0]))
+        user_groups['min_group_num'] = int(0)
+        user_groups['max_group_num'] = i
+        i += 1
+    return user_groups
+
+# Изменяем группу
+async def change_cards_group(user_id: str, state) -> str:
+    async with state.proxy() as data:
+        group_num = data['change_cards_group']['message']
+        group = data['change_cards_group']['groups'][group_num]
+        if group == "None": group = None
+        query = """SELECT 1 
+                    FROM word_groups 
+                    WHERE user_id == '{key}'"""
+        user_group = cur.execute(query.format(key=user_id)).fetchone()
+        if not user_group:
+            created_at = datetime.utcnow()
+            update_date = created_at
+            query = """INSERT INTO word_groups(user_id, actual_category, created_at, update_date) VALUES(?, ?, ?, ?)"""
+            cur.execute(query, (user_id, group, created_at, update_date))
+        else:
+            update_date = datetime.utcnow()
+            query = """UPDATE word_groups SET actual_category = ?, update_date = ? WHERE user_id == ?"""
+            cur.execute(query, (group, update_date, user_id))
+        db.commit()
+    return group
+
+
 # Вывод слов для повторения
-def cards(user_id: str) -> list:
-    query = """SELECT word_id
-                    , word
-                    , translation
-                FROM words 
-                WHERE user_id == '{key}'
-                AND reminder_date < strftime('%Y-%m-%d %H:%M:%S','now')
-                ORDER BY reminder_date
-                LIMIT 10"""
-    users_cards = cur.execute(query.format(key=user_id)).fetchall()
+def cards(user_id: str, group: str) -> list:
+    if group == message_texts.MSG_CARDS_ALL_WORDS: # Запрос для всех слов
+        query = """SELECT word_id
+                        , word
+                        , translation
+                    FROM words 
+                    WHERE user_id == '{key}'
+                    AND reminder_date < strftime('%Y-%m-%d %H:%M:%S','now')
+                    ORDER BY reminder_date
+                    LIMIT 10"""
+    elif str(group) == "None": # Запрос для группы NULL
+        query = """SELECT word_id
+                        , word
+                        , translation
+                    FROM words 
+                    WHERE user_id == '{key}'
+                    AND category IS NULL
+                    AND reminder_date < strftime('%Y-%m-%d %H:%M:%S','now')
+                    ORDER BY reminder_date
+                    LIMIT 10"""
+    else: # Запрос для остальных групп
+        query = """SELECT word_id
+                        , word
+                        , translation
+                    FROM words 
+                    WHERE user_id == '{key}'
+                    AND category == '{group}'
+                    AND reminder_date < strftime('%Y-%m-%d %H:%M:%S','now')
+                    ORDER BY reminder_date
+                    LIMIT 10"""
+    users_cards = cur.execute(query.format(key=user_id, group=group)).fetchall()
     rev = []
     rev_card = ()
     for card in users_cards:
@@ -261,7 +359,7 @@ async def update_remind_date(user_id: str, word_id: str, remind_in: str):
     query = """UPDATE words
                 SET reminder_date = '{update_date}'
                 WHERE user_id == '{key}'
-                AND word_id = '{word_id}'"""
+                AND word_id == '{word_id}'"""
     if remind_in == "remind in 1 day":
         remind_in_days = 0.9
     elif remind_in == "remind in 7 day":

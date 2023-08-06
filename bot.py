@@ -9,8 +9,8 @@ from aiogram.dispatcher import FSMContext
 from aiogram.dispatcher.filters.state import State, StatesGroup
 import message_texts
 from sqlite import db_start, add_access, get_users_w_access, create_profile,\
-    insert_words, select_words, delete_word, delete_all_words, cards, update_remind_date,\
-    words_num, words_in_group_num, select_duplicate, download_csv, any_query
+    insert_words, select_words, delete_word, delete_all_words, actual_user_group, all_user_groups, change_cards_group, cards,\
+    update_remind_date, words_num, words_in_group_num, select_duplicate, download_csv, any_query
 
 logging.basicConfig(level=logging.INFO)
 
@@ -33,6 +33,7 @@ class FSMDeleteAll(StatesGroup):
 
 class FSMCard(StatesGroup):
     word_for_reminder = State()
+    change_cards_group = State()
 
 class FSMQuery(StatesGroup):
     execute_query = State()
@@ -204,11 +205,13 @@ async def cancel_handler(message: types.Message, state: FSMContext, *args, **kwa
     elif current_state in ['FSMDelete:word_for_delete','FSMDeleteAll:delete_all']:
         answer_message = message_texts.MSG_CANCEL_DELETE
     elif current_state == 'FSMCard:word_for_reminder':
-        async with state.proxy() as data: # достаем id часа и сообщения, чтобы скрыть инлайновую клавиатуру
+        async with state.proxy() as data: # достаем id чата и сообщения, чтобы скрыть инлайновую клавиатуру
             chat_id = data['word_for_reminder']['chat_id']
             message_id = data['word_for_reminder']['cards_send_message']["message_id"]
         await bot.edit_message_reply_markup(chat_id = chat_id, message_id = message_id, reply_markup = None) # удаляем инлайновую клавиатуру
         answer_message = message_texts.MSG_CANCEL_REMINDER
+    elif current_state == 'FSMCard:change_cards_group':
+        answer_message = message_texts.MSG_CANCEL_CHANGE_GROUP
     else:
         answer_message = message_texts.MSG_CANCEL_GENETAL
     await state.finish()
@@ -229,7 +232,7 @@ async def word_insert(message: types.Message, state: FSMContext, *args, **kwargs
     await insert_words(user_id, user_message)
     await message.reply(answer_message, reply=False)
 
-    # выход из всех режимов, если они был включены
+    # выход из всех режимов, если они были включены
     current_state = await state.get_state()
     if current_state is not None:
         if current_state == 'FSMCard:word_for_reminder':
@@ -239,9 +242,14 @@ async def word_insert(message: types.Message, state: FSMContext, *args, **kwargs
             await bot.edit_message_reply_markup(chat_id = chat_id, message_id = message_id, reply_markup = None) # удаляем инлайновую клавиатуру
             answer_message = message_texts.MSG_CANCEL_REMINDER
             logging.info(f'Вышел из режима карточек | {user_id=}, {time.asctime()}')
+        elif current_state == 'FSMCard:change_cards_group':
+            answer_message = message_texts.MSG_CANCEL_CHANGE_GROUP
+            logging.info(f'Вышел из режима изменения групп | {user_id=}, {time.asctime()}')
         elif current_state in ['FSMDelete:word_for_delete','FSMDeleteAll:delete_all']:
             answer_message = message_texts.MSG_CANCEL_DELETE
             logging.info(f'Вышел из режима удаления | {user_id=}, {time.asctime()}')
+        else:
+            answer_message = message_texts.MSG_CANCEL_GENETAL
         await state.finish()
         await message.reply(answer_message, reply=False)
 
@@ -354,14 +362,15 @@ async def load_cards(message: types.Message, state: FSMContext, *args, **kwargs)
     chat_id = message.chat.id
     logging.info(f'Запущены карточки | {user_id=}, {time.asctime()}')
     index_num = 0
-    users_cards = cards(user_id)
+    group = await actual_user_group(user_id)
+    users_cards = cards(user_id, group)
     if not users_cards:
-        answer_message = message_texts.MSG_CARDS_NO_WORDS
-        await message.reply(answer_message, reply=False)
+        answer_message = message_texts.MSG_CARDS_NO_WORDS.format(group=group)
+        await message.reply(answer_message, reply=False, parse_mode = 'HTML')
     else:
         total_num = len(users_cards)
-        answer_message = message_texts.MSG_CARDS_INFO
-        await message.reply(answer_message, reply=False)
+        answer_message = message_texts.MSG_CARDS_INFO.format(group=group)
+        await message.reply(answer_message, reply=False, parse_mode = 'HTML')
 
         word_for_reminder = users_cards[index_num][1]
         cards_send_message = await bot.send_message(user_id, word_for_reminder, reply_markup=inline_buttons_translation)
@@ -441,6 +450,64 @@ async def cancel_cards(callback_query: types.CallbackQuery, state: FSMContext, *
     # DONATE
     answer_message_donate = message_texts.MSG_DONATE
     await callback_query.message.answer(answer_message_donate)
+
+
+# Изменение группы слов для режима карточек - показываем все группы
+@dp.message_handler(commands=['cards_group'], state='*')
+@users_access
+async def print_cards_group(message: types.Message, state: FSMContext, *args, **kwargs):
+    user_id = message.from_user.id
+    logging.info(f'Показываем все группы слов для режима карточек | {user_id=}, {time.asctime()}')
+
+    # выход из режима карточек, если он был включены
+    current_state = await state.get_state()
+    if current_state == 'FSMCard:word_for_reminder':
+        async with state.proxy() as data: # достаем id чата и сообщения, чтобы скрыть инлайновую клавиатуру
+            chat_id = data['word_for_reminder']['chat_id']
+            message_id = data['word_for_reminder']['cards_send_message']["message_id"]
+        await bot.edit_message_reply_markup(chat_id = chat_id, message_id = message_id, reply_markup = None) # удаляем инлайновую клавиатуру
+        await state.finish()
+    else:
+        await state.finish()
+
+    # переход в режим изменения группы
+    user_groups = await all_user_groups(user_id)
+    answer_message = message_texts.MSG_CARDS_USER_GROUPS.format(user_groups=user_groups['message_groups'])
+    await message.reply(answer_message, reply=False, parse_mode = 'HTML')
+    await FSMCard.change_cards_group.set()
+    async with state.proxy() as data:
+        data['change_cards_group'] = {'message_groups': user_groups['message_groups'],
+                                      'groups': user_groups['groups'],
+                                      'min_group_num': user_groups['min_group_num'],
+                                      'max_group_num': user_groups['max_group_num'],
+                                      'message': int()}
+
+# Изменение группы слов для режима карточек - ловим группу и меняем
+@dp.message_handler(state=FSMCard.change_cards_group)
+@users_access
+async def get_cards_group(message: types.Message, state: FSMContext, *args, **kwargs):
+    user_id = message.from_user.id
+    user_message = message.text
+    if user_message.isnumeric():
+        user_message = int(user_message)
+        async with state.proxy() as data:
+            min_group_num = data['change_cards_group']['min_group_num']
+            max_group_num = data['change_cards_group']['max_group_num'] + 1
+        if user_message in range(min_group_num, max_group_num):
+            logging.info(f'Изменена группа слов для режима карточек | {user_id=}, {time.asctime()}')
+            async with state.proxy() as data:
+                data['change_cards_group']['message'] = user_message
+            group = await change_cards_group(user_id, state) # меняем группу в БД
+            answer_message = message_texts.MSG_CARDS_GET_GROUPS.format(group=group)
+            await state.finish()
+            # return await load_cards()
+        else:
+            logging.info(f'Написан не существующий номер группы | {user_id=}, {time.asctime()}')
+            answer_message = message_texts.MSG_CARDS_GET_GROUPS_WRONG1
+    else:
+        logging.info(f'Написан не номер группы | {user_id=}, {time.asctime()}')
+        answer_message = message_texts.MSG_CARDS_GET_GROUPS_WRONG2
+    await message.reply(answer_message, reply=False, parse_mode = 'HTML')
 
 
 # Вывести дублирующиеся слова
