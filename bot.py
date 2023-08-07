@@ -95,10 +95,10 @@ inline_buttons_reminder.row(b2)
 async def setup_bot_commands():
     bot_commands = [
         types.BotCommand("cards", "Режим карточек"),
-        types.BotCommand("my_words", "Последние 15 слов"),
-        types.BotCommand("my_words_num", "Количество слов"),
-        types.BotCommand("my_words_in_groups_num", "Количество слов в группах"),
-        types.BotCommand("duplicates", "Вывести дублирующиеся слова"),
+        types.BotCommand("words", "Последние 15 слов"),
+        types.BotCommand("words_num", "Количество слов"),
+        types.BotCommand("words_in_groups_num", "Количество слов в группах"),
+        types.BotCommand("duplicates", "Дублирующиеся слова"),
         types.BotCommand("download_csv", "Скачать все слова в csv"),
         types.BotCommand("delete", "Режим удаления одного слова"),
         types.BotCommand("delete_all", "Режим удаления всех слов"),
@@ -302,7 +302,7 @@ async def delete_all_again(message: types.Message, state: FSMContext, *args, **k
 
 
 # Выводим список слов
-@dp.message_handler(commands=['my_words'])
+@dp.message_handler(commands=['words'])
 @users_access
 async def print_my_words(message: types.Message, *args, **kwargs):
     user_id = message.from_user.id
@@ -314,7 +314,7 @@ async def print_my_words(message: types.Message, *args, **kwargs):
 
 
 # Выводим кол-во слов всего
-@dp.message_handler(commands=['my_words_num'])
+@dp.message_handler(commands=['words_num'])
 @users_access
 async def print_my_words_num(message: types.Message, *args, **kwargs):
     user_id = message.from_user.id
@@ -323,7 +323,7 @@ async def print_my_words_num(message: types.Message, *args, **kwargs):
     await message.reply(answer_message, reply=False, parse_mode = 'HTML')
 
 # Выводим кол-во слов в группах
-@dp.message_handler(commands=['my_words_in_groups_num'])
+@dp.message_handler(commands=['words_in_groups_num'])
 @users_access
 async def print_my_words_in_groups_num(message: types.Message, *args, **kwargs):
     user_id = message.from_user.id
