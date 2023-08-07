@@ -157,7 +157,7 @@ async def select_words(user_id: str) -> str:
         if clients_words == "":
              message = "Еще нет сохраненных слов"
         else:
-            message = f"15 последних добавленных слов:\n\n{clients_words}"
+            message = message_texts.MSG_WORDS_LAST.format(clients_words=clients_words)
     return message
 
 
@@ -171,7 +171,7 @@ async def words_num(user_id: str) -> str:
                     FROM words 
                     WHERE user_id == '{key}'"""
         words_num = cur.execute(query.format(key=user_id)).fetchone()[0]
-        message = f"Сохранено слов: {words_num}"
+        message = message_texts.MSG_WORDS_NUM.format(words_num=words_num)
     return message
 
 # Кол-во сохраненных слов в группах
@@ -186,10 +186,10 @@ async def words_in_group_num(user_id: str) -> str:
                     FROM words a
                     WHERE user_id = '{key}'
                     GROUP BY category
-                    ORDER BY words_num DESC"""
+                    ORDER BY words_num DESC, category"""
         for word in cur.execute(query.format(key=user_id)).fetchall():
             words_in_group = words_in_group + str(word[0]) + " — " + str(word[1]) + "\n"
-        message = f"Сохранено слов в группах:\n{words_in_group}"
+        message = message_texts.MSG_WORDS_NUM_GROUP.format(words_in_group=words_in_group)
     return message
 
 
@@ -202,7 +202,7 @@ async def delete_word(user_id: str, state) -> str:
                     AND (translation == '{word}' OR word == '{word}')"""
         word_for_del = cur.execute(query.format(key=user_id, word=data['word_for_delete'])).fetchone()
         if not word_for_del:
-            message = "Такого слова нет. Вышел из режима удаления.\nУдалим другое слово? - /delete"
+            message = message_texts.MSG_DELETE_ERROR
         else:
             query = """DELETE 
                         FROM words 
@@ -210,21 +210,21 @@ async def delete_word(user_id: str, state) -> str:
                         AND (translation == '{word}' OR word == '{word}')"""
             cur.execute(query.format(key=user_id, word=data['word_for_delete']))
             db.commit()
-            message = "Удалил! И вышел из режима удаления.\nУдалим другое слово? - /delete"
+            message = message_texts.MSG_DELETE_DELETED
     return message
 
 
 # Удаление всех слов пользователя
 async def delete_all_words(user_id: str) -> str:
     if not profile_exists(user_id):
-        message = "Еще нет сохраненных слов"
+        message = message_texts.MSG_DELETE_ALL_ERROR
     else:
         query = """DELETE 
                     FROM words 
                     WHERE user_id == '{key}'"""
         cur.execute(query.format(key=user_id))
         db.commit()
-        message = "Все слова удалил!"
+        message = message_texts.MSG_DELETE_ALL_DELETED
     return message
 
 
@@ -390,13 +390,14 @@ async def select_duplicate(user_id: str) -> str:
 	                TRIM(REPLACE(GROUP_CONCAT(category),',',', ')) as categories
                 FROM duplicates
                 GROUP BY word
-                HAVING count(word) > 1"""
+                HAVING count(word) > 1
+                ORDER BY word"""
     for word in cur.execute(query.format(key=user_id)).fetchall():
-        duplicates = duplicates + str(word[0]) + " — " + str(word[1]) + " (" + str(word[2]) + ")" + "\n"
+        duplicates = duplicates + str(word[0]) + " — " + str(word[1]) + " | " + str(word[2]) + "\n"
     if duplicates == "":
         message = message_texts.MSG_DUPLICATE_NO_WORDS
     else:
-        message = f"Повторяющиеся слова в формате:\n<слово> — <количество повторений> (<категории>)\nЕсли группа None, значит у слова не указана группа\n\n{duplicates}"
+        message = message_texts.MSG_DUPLICATE.format(duplicates=duplicates)
     return message
 
 
@@ -410,9 +411,9 @@ async def any_query(query:str) -> str:
                 if count == 0:
                     output = output + str(row[count])
                 else:
-                    output = output + ' - ' + str(row[count])
+                    output = output + ' | ' + str(row[count])
             output = output + "\n"
-        messege = f"Результат запроса:\n\n{output}"
+        messege = message_texts.MSG_SQL_QUERY_RETURN.format(output=output)
     except:
-        messege = "Ошибка в запросе"
+        messege = message_texts.MSG_SQL_QUERY_ERROR
     return messege

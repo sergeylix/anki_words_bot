@@ -168,7 +168,7 @@ async def start_hendler(message: types.Message, *args, **kwargs):
 
     await create_profile(user_id, user_full_name)
     await message.reply(f'Привет, {user_name}!', reply=False)
-    await bot.send_message(user_id, message_texts.MSG_START)
+    await bot.send_message(user_id, message_texts.MSG_START, parse_mode = 'HTML')
 
 
 # Хэлп
@@ -178,7 +178,7 @@ async def help_hendler(message: types.Message, *args, **kwargs):
     user_id = message.from_user.id
     logging.info(f'Хэлп | {user_id=} {time.asctime()}')
 
-    await bot.send_message(user_id, message_texts.MSG_HELP)
+    await bot.send_message(user_id, message_texts.MSG_HELP, parse_mode = 'HTML')
 
 
 # Просмотр команд для автора
@@ -219,7 +219,8 @@ async def cancel_handler(message: types.Message, state: FSMContext, *args, **kwa
 
 
 # Добавление слова
-@dp.message_handler(state="*", regexp='.=.')
+@dp.message_handler(state={None, FSMDelete.word_for_delete, FSMDeleteAll.delete_all, FSMCard.word_for_reminder, FSMCard.change_cards_group}, 
+                    regexp='.=.')
 @users_access
 async def word_insert(message: types.Message, state: FSMContext, *args, **kwargs):
     user_id = message.from_user.id
@@ -230,7 +231,7 @@ async def word_insert(message: types.Message, state: FSMContext, *args, **kwargs
     answer_message = message_texts.MSG_INSERT_WORD
     await create_profile(user_id, user_full_name)
     await insert_words(user_id, user_message)
-    await message.reply(answer_message, reply=False)
+    await message.reply(answer_message)
 
     # выход из всех режимов, если они были включены
     current_state = await state.get_state()
@@ -318,10 +319,8 @@ async def print_my_words(message: types.Message, *args, **kwargs):
 async def print_my_words_num(message: types.Message, *args, **kwargs):
     user_id = message.from_user.id
     answer_message = await words_num(user_id)
-
     logging.info(f'Выводим кол-во сохраненных слов | {user_id=}, {time.asctime()}')
-    
-    await message.reply(answer_message, reply=False)
+    await message.reply(answer_message, reply=False, parse_mode = 'HTML')
 
 # Выводим кол-во слов в группах
 @dp.message_handler(commands=['my_words_in_groups_num'])
@@ -517,7 +516,7 @@ async def duplicates(message: types.Message, *args, **kwargs):
     user_id = message.from_user.id
     answer_message = await select_duplicate(user_id)
     logging.info(f'Вывод дублирующихся слов | {user_id=}, {time.asctime()}')
-    await message.reply(answer_message, reply=False)
+    await message.reply(answer_message, reply=False, parse_mode = 'HTML')
 
 
 # Выполнить любой SQL запрос
@@ -539,7 +538,7 @@ async def execute_query(message: types.Message, state: FSMContext, *args, **kwar
     query = message.text
     answer_message = await any_query(query)
     await state.finish()
-    await message.reply(answer_message)
+    await message.reply(answer_message, reply=False)
 
 
 # Донат
