@@ -231,7 +231,7 @@ async def actual_user_group(user_id: str) -> str:
                 WHERE user_id == '{key}'"""
     user_group = cur.execute(query.format(key=user_id)).fetchone()
     if not user_group:
-        user_group = message_texts.MSG_CARDS_ALL_WORDS
+        user_group = message_texts.MSG_ALL_WORDS
     else:
         user_group = user_group[0]
     return user_group
@@ -245,22 +245,24 @@ async def all_user_groups(user_id: str) -> dict:
     i = int(0)
     query = """SELECT * FROM (
                     SELECT '{category}' as category
-                        ,COUNT(word_id) as num
+                        ,SUM(CASE WHEN reminder_date < strftime('%Y-%m-%d %H:%M:%S','now') THEN 1 ELSE 0 END) as num
+                        ,COUNT(word_id) as num_total
                     FROM words
                     WHERE user_id == '{key}'
-                    AND reminder_date < strftime('%Y-%m-%d %H:%M:%S','now')
                 )
                 UNION ALL
                 SELECT * FROM (
                     SELECT DISTINCT category
                         ,SUM(case when reminder_date < strftime('%Y-%m-%d %H:%M:%S','now') then 1 else 0 end) as num
+                        ,COUNT(word_id) as num_total
                     FROM words 
                     WHERE user_id == '{key}'
                     GROUP BY category
                     ORDER BY category
                 )"""
-    for group in cur.execute(query.format(category=message_texts.MSG_CARDS_ALL_WORDS, key=user_id)).fetchall():
-        user_groups['message_groups'] = user_groups['message_groups'] + str(i) + " — " + str(group[0]) + " | " + str(group[1]) + "\n"
+    for group in cur.execute(query.format(category=message_texts.MSG_ALL_WORDS, key=user_id)).fetchall():
+        user_groups['message_groups'] = user_groups['message_groups'] + str(i) + " — " + str(group[0]) + " | "\
+                                                    + str(group[1]) + "/<b>" + str(group[2]) + "</b>" + "\n"
         user_groups['groups'].append(str(group[0]))
         user_groups['min_group_num'] = int(0)
         user_groups['max_group_num'] = i
@@ -292,7 +294,7 @@ async def change_cards_group(user_id: str, state) -> str:
 
 # Вывод слов для повторения
 def cards(user_id: str, group: str) -> list:
-    if group == message_texts.MSG_CARDS_ALL_WORDS: # Запрос для всех слов
+    if group == message_texts.MSG_ALL_WORDS: # Запрос для всех слов
         query = """SELECT word_id
                         , word
                         , translation
@@ -331,18 +333,31 @@ def cards(user_id: str, group: str) -> list:
     return users_cards
 
 
-# Скачать все сохраненные слова
-async def download_csv(user_id: str) -> str:
-    query = """SELECT word, translation, category, created_at, reminder_date
+# Скачать сохраненные слова
+async def download_csv(user_id: str, group: str) -> str:
+    if group == message_texts.MSG_ALL_WORDS: # Запрос для всех слов
+        query = """SELECT word, translation, category, created_at, reminder_date
                 FROM words
                 WHERE user_id == '{key}'
+                ORDER BY created_at dESC"""
+    elif str(group) == "None": # Запрос для группы NULL
+        query = """SELECT word, translation, category, created_at, reminder_date
+                FROM words
+                WHERE user_id == '{key}'
+                AND category IS NULL
+                ORDER BY created_at dESC"""
+    else: # Запрос для остальных групп
+        query = """SELECT word, translation, category, created_at, reminder_date
+                FROM words
+                WHERE user_id == '{key}'
+                AND category == '{group}'
                 ORDER BY created_at dESC"""
 
     script_dir = os.path.dirname(__file__)
     rel_path = f'tmp/id_{user_id}_{time.strftime("%Y%m%d_%H%M%S")}_UTF8.csv'
     abs_file_path = os.path.join(script_dir, rel_path)
 
-    df = pd.read_sql(query.format(key=user_id), db)
+    df = pd.read_sql(query.format(key=user_id, group=group), db)
     df.insert(0, 'row_number', range(1, 1 + len(df)))
     df.to_csv(abs_file_path, sep=';', index=False, encoding='utf-8')
 
