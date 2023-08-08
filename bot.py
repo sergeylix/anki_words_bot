@@ -8,7 +8,7 @@ from aiogram.contrib.fsm_storage.memory import MemoryStorage
 from aiogram.dispatcher import FSMContext
 from aiogram.dispatcher.filters.state import State, StatesGroup
 import message_texts
-from sqlite import db_start, add_access, get_users_w_access, create_profile,\
+from sqlite import db_start, add_access, get_users_w_access, create_profile, words_exists,\
     insert_words, select_words, delete_word, delete_all_words, actual_user_group, all_user_groups, change_cards_group, cards,\
     update_remind_date, words_num, select_duplicate, download_csv, any_query
 
@@ -37,6 +37,7 @@ class FSMCard(StatesGroup):
 
 class FSMDownload(StatesGroup):
     download_csv = State()
+    download_csv_group_selection = State()
 
 class FSMQuery(StatesGroup):
     execute_query = State()
@@ -278,8 +279,11 @@ async def word_insert(message: types.Message, state: FSMContext, *args, **kwargs
 async def word_delete(message: types.Message, *args, **kwargs):
     user_id = message.from_user.id
     logging.info(f'Удаление слова | {user_id=}, {time.asctime()}')
-    await FSMDelete.word_for_delete.set()
-    answer_message = message_texts.MSG_DELETE
+    if not words_exists(user_id):
+        answer_message = message_texts.MSG_NO_WORDS
+    else:
+        await FSMDelete.word_for_delete.set()
+        answer_message = message_texts.MSG_DELETE
     await message.reply(answer_message, reply=False, reply_markup=types.ReplyKeyboardRemove())
 
 # Ловим слово для удаления
@@ -302,20 +306,31 @@ async def load_word_for_delete(message: types.Message, state: FSMContext, *args,
 async def delete_all(message: types.Message, *args, **kwargs):
     user_id = message.from_user.id
     logging.info(f'Удаление всех слов | {user_id=}, {time.asctime()}')
-    await FSMDeleteAll.delete_all.set()
-    answer_message = message_texts.MSG_DELETE_ALL
+    if not words_exists(user_id):
+        answer_message = message_texts.MSG_NO_WORDS
+    else:
+        await FSMDeleteAll.delete_all.set()
+        answer_message = message_texts.MSG_DELETE_ALL
     await message.reply(answer_message, reply=False, reply_markup=types.ReplyKeyboardRemove())
 
-# Ловим подтверждение, что нужно удалить все слова
+# Ловим запуск процесса удаления всех слов
 @dp.message_handler(commands=['delete_all'], state=FSMDeleteAll.delete_all)
+@users_access
+async def delete_all_again(message: types.Message, *args, **kwargs):
+    user_id = message.from_user.id
+    logging.info(f'Запущен процесс удаления всех слов | {user_id=}, {time.asctime()}')
+    answer_message = message_texts.MSG_DELETE_ALL_X2
+    await message.reply(answer_message)
+
+# Ловим подтверждение, что нужно удалить все слова
+@dp.message_handler(commands=['yes'], state=FSMDeleteAll.delete_all)
 @users_access
 async def delete_all_again(message: types.Message, state: FSMContext, *args, **kwargs):
     user_id = message.from_user.id
     logging.info(f'Все слова удалены | {user_id=}, {time.asctime()}')
-        
     answer_message = await delete_all_words(user_id)
     await state.finish()
-    await message.reply(answer_message)
+    await message.reply(answer_message, reply=False)
 
 
 # Выводим список слов
@@ -346,13 +361,14 @@ async def print_my_words_num(message: types.Message, *args, **kwargs):
 async def download(message: types.Message, state: FSMContext, *args, **kwargs):
     user_id = message.from_user.id
     logging.info(f'Пользователь выбирает способ скачивания csv | {user_id=}, {time.asctime()}')
+    if not words_exists(user_id):
+        answer_message = message_texts.MSG_NO_WORDS
+        await message.reply(answer_message, reply=False, reply_markup=types.ReplyKeyboardRemove())
+    else:
+        await FSMDownload.download_csv.set()
+        answer_message = message_texts.MSG_DOWNLOAD_CSV
+        await message.reply(answer_message, reply=False, parse_mode = 'HTML', reply_markup = buttons_download)
 
-    group = await actual_user_group(user_id)
-    answer_message = message_texts.MSG_DOWNLOAD_CSV.format(group=group)
-    await message.reply(answer_message, reply=False, reply_markup=buttons_download, parse_mode = 'HTML')
-    await FSMDownload.download_csv.set()
-    async with state.proxy() as data:
-            data['download_csv'] = {'group': group}
 
 # Ловим кнопку для скачивания csv
 @dp.message_handler(text={message_texts.KB_DOWNLOAD_ALL,message_texts.KB_DOWNLOAD_GROUP,message_texts.KB_DOWNLOAD_CANCEL}, state=FSMDownload.download_csv)
@@ -360,28 +376,75 @@ async def download(message: types.Message, state: FSMContext, *args, **kwargs):
 async def download(message: types.Message, state: FSMContext, *args, **kwargs):
     user_id = message.from_user.id
     user_message = message.text
-    logging.info(f'Скачиваем файлы для пользователя в csv | {user_id=}, {time.asctime()}')
 
     if user_message == message_texts.KB_DOWNLOAD_CANCEL:
+        logging.info(f'Выход из режима скачивания | {user_id=}, {time.asctime()}')
         answer_message = message_texts.MSG_DOWNLOAD_CSV_CONCEL
         await message.reply(answer_message, reply=False, reply_markup=types.ReplyKeyboardRemove())
+        await state.finish()
+    elif user_message == message_texts.KB_DOWNLOAD_ALL:
+        logging.info(f'Скачиваем файл для пользователя в csv | {user_id=}, {time.asctime()}')
+        group = message_texts.MSG_ALL_WORDS
+        fp = await download_csv(user_id, group)
+        doc = open(fp, 'rb')
+        await message.reply_document(document=doc, reply_markup=types.ReplyKeyboardRemove())
+        doc.close()
+        if os.path.isfile(fp):
+            os.remove(fp)
+            logging.info(f'{fp} deleted. | {user_id=}, {time.asctime()}')
+        else:
+            logging.info(f'{fp} not found. | {user_id=}, {time.asctime()}')
+        await state.finish()
     else:
+        user_groups = await all_user_groups(user_id, state)
+        answer_message = message_texts.MSG_DOWNLOAD_CSV_GROUPS.format(user_groups=user_groups['message_groups'])
+        await message.reply(answer_message, reply=False, parse_mode = 'HTML', reply_markup=types.ReplyKeyboardRemove())
+        await state.finish()
+        await FSMDownload.download_csv_group_selection.set()
         async with state.proxy() as data:
-            if user_message == message_texts.KB_DOWNLOAD_ALL:
-                group = message_texts.MSG_ALL_WORDS
-            else:
-                group = data['download_csv']['group']
+            data['download_csv_group_selection'] = {'message_groups': user_groups['message_groups'],
+                                        'groups': user_groups['groups'],
+                                        'min_group_num': user_groups['min_group_num'],
+                                        'max_group_num': user_groups['max_group_num'],
+                                        'message': int()}
+
+# Ловим группу для скачивания csv
+@dp.message_handler(state=FSMDownload.download_csv_group_selection)
+@users_access
+async def download(message: types.Message, state: FSMContext, *args, **kwargs):
+    user_id = message.from_user.id
+    user_message = message.text
+
+    if user_message.isnumeric():
+        user_message = int(user_message)
+        async with state.proxy() as data:
+            min_group_num = data['download_csv_group_selection']['min_group_num']
+            max_group_num = data['download_csv_group_selection']['max_group_num'] + 1
+        if user_message in range(min_group_num, max_group_num):
+            logging.info(f'Скачиваем файл по группе в csv | {user_id=}, {time.asctime()}')
+            group_num = user_message
+            group = data['download_csv_group_selection']['groups'][group_num]
+            answer_message = message_texts.MSG_DOWNLOAD_CSV_GROUP.format(group=group)
+            await message.reply(answer_message, reply=False, parse_mode = 'HTML')
 
             fp = await download_csv(user_id, group)
             doc = open(fp, 'rb')
-            await message.reply_document(document=doc, reply_markup=types.ReplyKeyboardRemove())
+            await message.answer_document(document=doc, reply_markup=types.ReplyKeyboardRemove())
             doc.close()
             if os.path.isfile(fp):
                 os.remove(fp)
                 logging.info(f'{fp} deleted. | {user_id=}, {time.asctime()}')
             else:
                 logging.info(f'{fp} not found. | {user_id=}, {time.asctime()}')
-    await state.finish()
+            await state.finish()
+        else:
+            logging.info(f'Написан не существующий номер группы | {user_id=}, {time.asctime()}')
+            answer_message = message_texts.MSG_CARDS_GET_GROUPS_WRONG1
+            await message.reply(answer_message, reply=False, parse_mode = 'HTML')
+    else:
+        logging.info(f'Написан не номер группы | {user_id=}, {time.asctime()}')
+        answer_message = message_texts.MSG_CARDS_GET_GROUPS_WRONG2
+        await message.reply(answer_message, reply=False, parse_mode = 'HTML')
 
 
 # Карточки для напоминания слов
@@ -502,7 +565,7 @@ async def print_cards_group(message: types.Message, state: FSMContext, *args, **
         await state.finish()
 
     # переход в режим изменения группы
-    user_groups = await all_user_groups(user_id)  
+    user_groups = await all_user_groups(user_id, state)  
     answer_message = message_texts.MSG_CARDS_USER_GROUPS.format(user_groups=user_groups['message_groups'])
     await message.reply(answer_message, reply=False, parse_mode = 'HTML', reply_markup=types.ReplyKeyboardRemove())
     await FSMCard.change_cards_group.set()
@@ -536,7 +599,6 @@ async def get_cards_group(message: types.Message, state: FSMContext, *args, **kw
             else:
                 answer_message = message_texts.MSG_CARDS_GET_GROUPS.format(group=group)
             await state.finish()
-            # return await load_cards()
         else:
             logging.info(f'Написан не существующий номер группы | {user_id=}, {time.asctime()}')
             answer_message = message_texts.MSG_CARDS_GET_GROUPS_WRONG1

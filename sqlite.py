@@ -98,6 +98,16 @@ def profile_exists(user_id: str) -> bool:
     return profile_exists
 
 
+# Проверка, что у пользователя есть слова
+def words_exists(user_id: str) -> bool:
+    word = cur.execute("SELECT 1 FROM words WHERE user_id == '{key}'".format(key=user_id)).fetchone()
+    if not word:
+        words_exists=False
+    else:
+        words_exists=True
+    return words_exists
+
+
 # Выдача прав пользователю
 async def add_access(users:  list, flg: int):
     for user_id in users:
@@ -142,7 +152,7 @@ async def select_words(user_id: str) -> str:
     message = ""
     clients_words = ""
     if not profile_exists(user_id):
-        message = message_texts.MSG_WORDS_NO_WORDS
+        message = message_texts.MSG_NO_WORDS
     else:
         query = """SELECT word, translation, category
                     FROM words 
@@ -155,7 +165,7 @@ async def select_words(user_id: str) -> str:
             else:
                 clients_words = clients_words + word[0] + " | " + word[1] + " (" +  word[2] + ")" +"\n"
         if clients_words == "":
-             message = message_texts.MSG_WORDS_NO_WORDS
+             message = message_texts.MSG_NO_WORDS
         else:
             message = message_texts.MSG_WORDS_LAST.format(clients_words=clients_words)
     return message
@@ -166,7 +176,7 @@ async def words_num(user_id: str) -> str:
     message = ""
     words_in_group = ""
     if not profile_exists(user_id):
-        message = message_texts.MSG_WORDS_NUM_NO_WORDS
+        message = message_texts.MSG_NO_WORDS
     else:
         # всего слов
         query = """SELECT count(word_id)
@@ -212,7 +222,7 @@ async def delete_word(user_id: str, state) -> str:
 # Удаление всех слов пользователя
 async def delete_all_words(user_id: str) -> str:
     if not profile_exists(user_id):
-        message = message_texts.MSG_DELETE_ALL_ERROR
+        message = message_texts.MSG_NO_WORDS
     else:
         query = """DELETE 
                     FROM words 
@@ -237,7 +247,7 @@ async def actual_user_group(user_id: str) -> str:
     return user_group
 
 # Все группы слов пользователя
-async def all_user_groups(user_id: str) -> dict:
+async def all_user_groups(user_id: str, state) -> dict:
     user_groups = {'message_groups': str(),
                    'groups': [],
                    'min_group_num': int(), 
@@ -260,13 +270,23 @@ async def all_user_groups(user_id: str) -> dict:
                     GROUP BY category
                     ORDER BY category
                 )"""
-    for group in cur.execute(query.format(category=message_texts.MSG_ALL_WORDS, key=user_id)).fetchall():
-        user_groups['message_groups'] = user_groups['message_groups'] + str(i) + " — " + str(group[0]) + " | "\
-                                                    + str(group[1]) + "/<b>" + str(group[2]) + "</b>" + "\n"
-        user_groups['groups'].append(str(group[0]))
-        user_groups['min_group_num'] = int(0)
-        user_groups['max_group_num'] = i
-        i += 1
+    current_state = await state.get_state()
+    if current_state == 'FSMDownload:download_csv':
+        for group in cur.execute(query.format(category=message_texts.MSG_ALL_WORDS, key=user_id)).fetchall():
+            user_groups['message_groups'] = user_groups['message_groups'] + str(i) + " — " + str(group[0]) + " | "\
+                                                        + "<b>" + str(group[2]) + "</b>" + "\n"
+            user_groups['groups'].append(str(group[0]))
+            user_groups['min_group_num'] = int(0)
+            user_groups['max_group_num'] = i
+            i += 1
+    else:
+        for group in cur.execute(query.format(category=message_texts.MSG_ALL_WORDS, key=user_id)).fetchall():
+            user_groups['message_groups'] = user_groups['message_groups'] + str(i) + " — " + str(group[0]) + " | "\
+                                                        + str(group[1]) + "/<b>" + str(group[2]) + "</b>" + "\n"
+            user_groups['groups'].append(str(group[0]))
+            user_groups['min_group_num'] = int(0)
+            user_groups['max_group_num'] = i
+            i += 1
     return user_groups
 
 # Изменяем группу
