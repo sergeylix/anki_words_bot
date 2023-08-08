@@ -142,7 +142,7 @@ async def select_words(user_id: str) -> str:
     message = ""
     clients_words = ""
     if not profile_exists(user_id):
-        message = "Еще нет сохраненных слов"
+        message = message_texts.MSG_WORDS_NO_WORDS
     else:
         query = """SELECT word, translation, category
                     FROM words 
@@ -155,7 +155,7 @@ async def select_words(user_id: str) -> str:
             else:
                 clients_words = clients_words + word[0] + " | " + word[1] + " (" +  word[2] + ")" +"\n"
         if clients_words == "":
-             message = "Еще нет сохраненных слов"
+             message = message_texts.MSG_WORDS_NO_WORDS
         else:
             message = message_texts.MSG_WORDS_LAST.format(clients_words=clients_words)
     return message
@@ -164,23 +164,17 @@ async def select_words(user_id: str) -> str:
 # Кол-во сохраненных слов всего
 async def words_num(user_id: str) -> str:
     message = ""
+    words_in_group = ""
     if not profile_exists(user_id):
-        message = "Еще нет сохраненных слов"
+        message = message_texts.MSG_WORDS_NUM_NO_WORDS
     else:
+        # всего слов
         query = """SELECT count(word_id)
                     FROM words 
                     WHERE user_id == '{key}'"""
         words_num = cur.execute(query.format(key=user_id)).fetchone()[0]
         message = message_texts.MSG_WORDS_NUM.format(words_num=words_num)
-    return message
-
-# Кол-во сохраненных слов в группах
-async def words_in_group_num(user_id: str) -> str:
-    message = ""
-    words_in_group = ""
-    if not profile_exists(user_id):
-        message = "Еще нет сохраненных слов"
-    else:
+        # в группах
         query = """SELECT category
 	                    ,count(distinct a.word_id) as words_num
                     FROM words a
@@ -189,7 +183,8 @@ async def words_in_group_num(user_id: str) -> str:
                     ORDER BY words_num DESC, category"""
         for word in cur.execute(query.format(key=user_id)).fetchall():
             words_in_group = words_in_group + str(word[0]) + " — " + str(word[1]) + "\n"
-        message = message_texts.MSG_WORDS_NUM_GROUP.format(words_in_group=words_in_group)
+        if words_in_group:
+            message = message + "\n\n" + message_texts.MSG_WORDS_NUM_GROUP.format(words_in_group=words_in_group)
     return message
 
 

@@ -10,7 +10,7 @@ from aiogram.dispatcher.filters.state import State, StatesGroup
 import message_texts
 from sqlite import db_start, add_access, get_users_w_access, create_profile,\
     insert_words, select_words, delete_word, delete_all_words, actual_user_group, all_user_groups, change_cards_group, cards,\
-    update_remind_date, words_num, words_in_group_num, select_duplicate, download_csv, any_query
+    update_remind_date, words_num, select_duplicate, download_csv, any_query
 
 logging.basicConfig(level=logging.INFO)
 
@@ -97,7 +97,6 @@ async def setup_bot_commands():
         types.BotCommand("cards", "Режим карточек"),
         types.BotCommand("words", "Последние 15 слов"),
         types.BotCommand("words_num", "Количество слов"),
-        types.BotCommand("words_in_groups_num", "Количество слов в группах"),
         types.BotCommand("duplicates", "Дублирующиеся слова"),
         types.BotCommand("download_csv", "Скачать все слова в csv"),
         types.BotCommand("delete", "Режим удаления одного слова"),
@@ -321,17 +320,6 @@ async def print_my_words_num(message: types.Message, *args, **kwargs):
     answer_message = await words_num(user_id)
     logging.info(f'Выводим кол-во сохраненных слов | {user_id=}, {time.asctime()}')
     await message.reply(answer_message, reply=False, parse_mode = 'HTML')
-
-# Выводим кол-во слов в группах
-@dp.message_handler(commands=['words_in_groups_num'])
-@users_access
-async def print_my_words_in_groups_num(message: types.Message, *args, **kwargs):
-    user_id = message.from_user.id
-    answer_message = await words_in_group_num(user_id)
-
-    logging.info(f'Выводим кол-во сохраненных слов в группах | {user_id=}, {time.asctime()}')
-    
-    await message.reply(answer_message, reply=False)
 
 
 # Скачиваем все слова в csv
