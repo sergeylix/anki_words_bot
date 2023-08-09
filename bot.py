@@ -95,14 +95,24 @@ b6 = types.InlineKeyboardButton(text='90', callback_data='remind in 90 day')
 inline_buttons_reminder.add(b3, b4, b5, b6)
 inline_buttons_reminder.row(b2)
 
-# Обычные клавиатуры
-buttons_download = types.ReplyKeyboardMarkup(resize_keyboard=True)
-download_b1 = types.KeyboardButton(text=message_texts.KB_DOWNLOAD_ALL)
-download_b2 = types.KeyboardButton(text=message_texts.KB_DOWNLOAD_GROUP)
-download_b3 = types.KeyboardButton(text=message_texts.KB_DOWNLOAD_CANCEL)
+# Что скачать
+inline_buttons_download = types.InlineKeyboardMarkup(row_width=3)
+download_b1 = types.InlineKeyboardButton(text=message_texts.KB_DOWNLOAD_ALL, callback_data='download_all')
+download_b2 = types.InlineKeyboardButton(text=message_texts.KB_DOWNLOAD_GROUP, callback_data='download_group')
+download_b3 = types.InlineKeyboardButton(text=message_texts.KB_DOWNLOAD_CANCEL, callback_data='cancel')
 
-buttons_download.add(download_b1, download_b2)
-buttons_download.row(download_b3)
+inline_buttons_download.add(download_b1)
+inline_buttons_download.row(download_b2)
+inline_buttons_download.row(download_b3)
+
+# Обычные клавиатуры
+# buttons_download = types.ReplyKeyboardMarkup(resize_keyboard=True)
+# download_b1 = types.KeyboardButton(text=message_texts.KB_DOWNLOAD_ALL)
+# download_b2 = types.KeyboardButton(text=message_texts.KB_DOWNLOAD_GROUP)
+# download_b3 = types.KeyboardButton(text=message_texts.KB_DOWNLOAD_CANCEL)
+
+# buttons_download.add(download_b1, download_b2)
+# buttons_download.row(download_b3)
 
 
 # Команды
@@ -191,7 +201,7 @@ async def help_hendler(message: types.Message, *args, **kwargs):
     user_id = message.from_user.id
     logging.info(f'Хэлп | {user_id=} {time.asctime()}')
 
-    await bot.send_message(user_id, message_texts.MSG_HELP, parse_mode = 'HTML', reply_markup=types.ReplyKeyboardRemove())
+    await bot.send_message(user_id, message_texts.MSG_HELP, parse_mode = 'HTML')
 
 
 # Просмотр команд для автора
@@ -201,7 +211,7 @@ async def help_auth_hendler(message: types.Message, *args, **kwargs):
     user_id = message.from_user.id
     logging.info(f'Хэлп для автора | {user_id=} {time.asctime()}')
 
-    await bot.send_message(user_id, message_texts.MSG_AUTH_HELP, reply_markup=types.ReplyKeyboardRemove())
+    await bot.send_message(user_id, message_texts.MSG_AUTH_HELP)
 
 
 # Выход из состояний
@@ -220,21 +230,30 @@ async def cancel_handler(message: types.Message, state: FSMContext, *args, **kwa
     elif current_state == 'FSMCard:word_for_reminder':
         async with state.proxy() as data: # достаем id чата и сообщения, чтобы скрыть инлайновую клавиатуру
             chat_id = data['word_for_reminder']['chat_id']
-            message_id = data['word_for_reminder']['cards_send_message']["message_id"]
+            message_id = data['word_for_reminder']['cards_send_message']['message_id']
         await bot.edit_message_reply_markup(chat_id = chat_id, message_id = message_id, reply_markup = None) # удаляем инлайновую клавиатуру
         answer_message = message_texts.MSG_CANCEL_REMINDER
     elif current_state == 'FSMCard:change_cards_group':
         answer_message = message_texts.MSG_CANCEL_CHANGE_GROUP
     elif current_state == 'FSMDownload:download_csv':
+        async with state.proxy() as data: # достаем id чата и сообщения, чтобы скрыть инлайновую клавиатуру
+            chat_id = data['download_csv']['chat_id']
+            message_id = data['download_csv']['message_id']
+        await bot.edit_message_reply_markup(chat_id = chat_id, message_id = message_id, reply_markup = None) # удаляем инлайновую клавиатуру
         answer_message = message_texts.MSG_CANCEL_CHANGE_DOWNLOAD
     else:
         answer_message = message_texts.MSG_CANCEL_GENETAL
     await state.finish()
-    await message.reply(answer_message, reply=False, reply_markup=types.ReplyKeyboardRemove())
+    await message.reply(answer_message, reply=False)
 
 
 # Добавление слова
-@dp.message_handler(state={None, FSMDelete.word_for_delete, FSMDeleteAll.delete_all, FSMDownload.download_csv, FSMCard.word_for_reminder, FSMCard.change_cards_group}, 
+@dp.message_handler(state={None, FSMDelete.word_for_delete, 
+                           FSMDeleteAll.delete_all, 
+                           FSMDownload.download_csv, 
+                           FSMDownload.download_csv_group_selection,
+                           FSMCard.word_for_reminder, 
+                           FSMCard.change_cards_group}, 
                     regexp='.=.')
 @users_access
 async def word_insert(message: types.Message, state: FSMContext, *args, **kwargs):
@@ -258,19 +277,23 @@ async def word_insert(message: types.Message, state: FSMContext, *args, **kwargs
             await bot.edit_message_reply_markup(chat_id = chat_id, message_id = message_id, reply_markup = None) # удаляем инлайновую клавиатуру
             answer_message = message_texts.MSG_CANCEL_REMINDER
             logging.info(f'Вышел из режима карточек | {user_id=}, {time.asctime()}')
-        elif current_state == 'FSMCard:change_cards_group':
+        elif current_state in ['FSMCard:change_cards_group','FSMDownload:download_csv_group_selection']:
             answer_message = message_texts.MSG_CANCEL_CHANGE_GROUP
             logging.info(f'Вышел из режима изменения групп | {user_id=}, {time.asctime()}')
         elif current_state in ['FSMDelete:word_for_delete','FSMDeleteAll:delete_all']:
             answer_message = message_texts.MSG_CANCEL_DELETE
             logging.info(f'Вышел из режима удаления | {user_id=}, {time.asctime()}')
         elif current_state == 'FSMDownload:download_csv':
+            async with state.proxy() as data: # достаем id чата и сообщения, чтобы скрыть инлайновую клавиатуру
+                chat_id = data['download_csv']['chat_id']
+                message_id = data['download_csv']['message_id']
+            await bot.edit_message_reply_markup(chat_id = chat_id, message_id = message_id, reply_markup = None) # удаляем инлайновую клавиатуру
             answer_message = message_texts.MSG_CANCEL_CHANGE_DOWNLOAD
             logging.info(f'Вышел из режима скачивания | {user_id=}, {time.asctime()}')
         else:
             answer_message = message_texts.MSG_CANCEL_GENETAL
         await state.finish()
-        await message.reply(answer_message, reply=False, reply_markup=types.ReplyKeyboardRemove())
+        await message.reply(answer_message, reply=False)
 
 
 # Удаление слова
@@ -284,7 +307,7 @@ async def word_delete(message: types.Message, *args, **kwargs):
     else:
         await FSMDelete.word_for_delete.set()
         answer_message = message_texts.MSG_DELETE
-    await message.reply(answer_message, reply=False, reply_markup=types.ReplyKeyboardRemove())
+    await message.reply(answer_message, reply=False)
 
 # Ловим слово для удаления
 @dp.message_handler(state=FSMDelete.word_for_delete)
@@ -311,7 +334,7 @@ async def delete_all(message: types.Message, *args, **kwargs):
     else:
         await FSMDeleteAll.delete_all.set()
         answer_message = message_texts.MSG_DELETE_ALL
-    await message.reply(answer_message, reply=False, reply_markup=types.ReplyKeyboardRemove())
+    await message.reply(answer_message, reply=False)
 
 # Ловим запуск процесса удаления всех слов
 @dp.message_handler(commands=['delete_all'], state=FSMDeleteAll.delete_all)
@@ -342,7 +365,7 @@ async def print_my_words(message: types.Message, *args, **kwargs):
 
     logging.info(f'Выводим список сохраненных слов | {user_id=}, {time.asctime()}')
     
-    await message.reply(answer_message, reply=False, reply_markup=types.ReplyKeyboardRemove())
+    await message.reply(answer_message, reply=False)
 
 
 # Выводим кол-во слов всего
@@ -352,7 +375,7 @@ async def print_my_words_num(message: types.Message, *args, **kwargs):
     user_id = message.from_user.id
     answer_message = await words_num(user_id)
     logging.info(f'Выводим кол-во сохраненных слов | {user_id=}, {time.asctime()}')
-    await message.reply(answer_message, reply=False, parse_mode = 'HTML', reply_markup=types.ReplyKeyboardRemove())
+    await message.reply(answer_message, reply=False, parse_mode = 'HTML')
 
 
 # Скачиваем слова в csv
@@ -363,31 +386,37 @@ async def download(message: types.Message, state: FSMContext, *args, **kwargs):
     logging.info(f'Пользователь выбирает способ скачивания csv | {user_id=}, {time.asctime()}')
     if not words_exists(user_id):
         answer_message = message_texts.MSG_NO_WORDS
-        await message.reply(answer_message, reply=False, reply_markup=types.ReplyKeyboardRemove())
+        await message.reply(answer_message, reply=False)
     else:
         await FSMDownload.download_csv.set()
         answer_message = message_texts.MSG_DOWNLOAD_CSV
-        await message.reply(answer_message, reply=False, parse_mode = 'HTML', reply_markup = buttons_download)
+        download_send_message = await message.reply(answer_message, reply=False, parse_mode = 'HTML', reply_markup = inline_buttons_download)
+        download_send_message
+        chat_id = message.chat.id
+        message_id = download_send_message['message_id']
+        async with state.proxy() as data:
+            data['download_csv'] = {'chat_id': chat_id,
+                                        'message_id': message_id}
 
 
-# Ловим кнопку для скачивания csv
-@dp.message_handler(text={message_texts.KB_DOWNLOAD_ALL,message_texts.KB_DOWNLOAD_GROUP,message_texts.KB_DOWNLOAD_CANCEL}, state=FSMDownload.download_csv)
+# Ответ на колбэк скачивания - что скачиваем?
+@dp.callback_query_handler(filters.Text(contains=['download_']), state=FSMDownload.download_csv) 
 @users_access
-async def download(message: types.Message, state: FSMContext, *args, **kwargs):
-    user_id = message.from_user.id
-    user_message = message.text
+async def download(callback_query: types.CallbackQuery, state: FSMContext, *args, **kwargs):
+    user_id = callback_query.from_user.id
+    download_type = callback_query.data
 
-    if user_message == message_texts.KB_DOWNLOAD_CANCEL:
-        logging.info(f'Выход из режима скачивания | {user_id=}, {time.asctime()}')
-        answer_message = message_texts.MSG_DOWNLOAD_CSV_CONCEL
-        await message.reply(answer_message, reply=False, reply_markup=types.ReplyKeyboardRemove())
-        await state.finish()
-    elif user_message == message_texts.KB_DOWNLOAD_ALL:
+    if download_type == 'download_all':
         logging.info(f'Скачиваем файл для пользователя в csv | {user_id=}, {time.asctime()}')
         group = message_texts.MSG_ALL_WORDS
+        answer_message = message_texts.MSG_DOWNLOAD_CSV_ALL
+        await callback_query.message.answer(answer_message, reply=False, parse_mode = 'HTML')
+
         fp = await download_csv(user_id, group)
         doc = open(fp, 'rb')
-        await message.reply_document(document=doc, reply_markup=types.ReplyKeyboardRemove())
+        await callback_query.message.answer_document(document=doc)
+        await callback_query.message.delete_reply_markup() # удаляем инлайновую клавиатуру
+        await callback_query.answer() # завершаем коллбэк
         doc.close()
         if os.path.isfile(fp):
             os.remove(fp)
@@ -398,7 +427,9 @@ async def download(message: types.Message, state: FSMContext, *args, **kwargs):
     else:
         user_groups = await all_user_groups(user_id, state)
         answer_message = message_texts.MSG_DOWNLOAD_CSV_GROUPS.format(user_groups=user_groups['message_groups'])
-        await message.reply(answer_message, reply=False, parse_mode = 'HTML', reply_markup=types.ReplyKeyboardRemove())
+        await callback_query.message.answer(answer_message, parse_mode = 'HTML')
+        await callback_query.message.delete_reply_markup() # удаляем инлайновую клавиатуру
+        await callback_query.answer() # завершаем коллбэк
         await state.finish()
         await FSMDownload.download_csv_group_selection.set()
         async with state.proxy() as data:
@@ -429,7 +460,7 @@ async def download(message: types.Message, state: FSMContext, *args, **kwargs):
 
             fp = await download_csv(user_id, group)
             doc = open(fp, 'rb')
-            await message.answer_document(document=doc, reply_markup=types.ReplyKeyboardRemove())
+            await message.answer_document(document=doc)
             doc.close()
             if os.path.isfile(fp):
                 os.remove(fp)
@@ -446,6 +477,19 @@ async def download(message: types.Message, state: FSMContext, *args, **kwargs):
         answer_message = message_texts.MSG_CARDS_GET_GROUPS_WRONG2
         await message.reply(answer_message, reply=False, parse_mode = 'HTML')
 
+# Ответ на колбэк скачивания - отмена
+@dp.callback_query_handler(filters.Text(contains=['cancel']), state=FSMDownload.download_csv) 
+@users_access
+async def cancel_download(callback_query: types.CallbackQuery, state: FSMContext, *args, **kwargs):
+    user_id = callback_query.from_user.id
+    logging.info(f'Отмена | {user_id=}, {time.asctime()}')
+    await callback_query.message.delete_reply_markup() # удаляем инлайновую клавиатуру
+    await callback_query.answer() # завершаем коллбэк
+
+    answer_message = message_texts.MSG_DOWNLOAD_CSV_CONCEL
+    await state.finish()
+    await callback_query.message.answer(answer_message)
+
 
 # Карточки для напоминания слов
 @dp.message_handler(commands=['cards'], state=None)
@@ -460,11 +504,11 @@ async def load_cards(message: types.Message, state: FSMContext, *args, **kwargs)
     users_cards = cards(user_id, group)
     if not users_cards:
         answer_message = message_texts.MSG_CARDS_NO_WORDS.format(group=group)
-        await message.reply(answer_message, reply=False, parse_mode = 'HTML', reply_markup=types.ReplyKeyboardRemove())
+        await message.reply(answer_message, reply=False, parse_mode = 'HTML')
     else:
         total_num = len(users_cards)
         answer_message = message_texts.MSG_CARDS_INFO.format(group=group)
-        await message.reply(answer_message, reply=False, parse_mode = 'HTML', reply_markup=types.ReplyKeyboardRemove())
+        await message.reply(answer_message, reply=False, parse_mode = 'HTML')
 
         word_for_reminder = users_cards[index_num][1]
         cards_send_message = await bot.send_message(user_id, word_for_reminder, reply_markup=inline_buttons_translation)
@@ -567,7 +611,7 @@ async def print_cards_group(message: types.Message, state: FSMContext, *args, **
     # переход в режим изменения группы
     user_groups = await all_user_groups(user_id, state)  
     answer_message = message_texts.MSG_CARDS_USER_GROUPS.format(user_groups=user_groups['message_groups'])
-    await message.reply(answer_message, reply=False, parse_mode = 'HTML', reply_markup=types.ReplyKeyboardRemove())
+    await message.reply(answer_message, reply=False, parse_mode = 'HTML')
     await FSMCard.change_cards_group.set()
     async with state.proxy() as data:
         data['change_cards_group'] = {'message_groups': user_groups['message_groups'],
