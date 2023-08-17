@@ -880,7 +880,7 @@ async def sched():
 
 
 scheduler = AsyncIOScheduler(timezone=utc)
-scheduler.add_job(sched, trigger='cron', hour='9', minute='20')
+scheduler.add_job(sched, trigger='cron', hour='10', minute='00')
 scheduler.start()
 
 if __name__ == '__main__':
