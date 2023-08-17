@@ -68,6 +68,33 @@ async def db_start():
     cur.execute(query)
     db.commit()
 
+    # Создание таблицы уведомлений
+    query = """CREATE TABLE IF NOT EXISTS notifications(
+					user_id TEXT PRIMARY KEY,
+                    notifications_interval INTEGER,
+                    next_notifications_date TIMESTAMP,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+                    update_date TIMESTAMP,
+                    FOREIGN KEY (user_id) REFERENCES profile(user_id))"""
+    cur.execute(query)
+    db.commit()
+
+    # Получаем список пользователей, у которых нет записи в таблице уведомлений
+    users_to_notif = []
+    query = """SELECT a.user_id 
+                    FROM profile a
+                    LEFT JOIN notifications b ON a.user_id = b.user_id
+                    WHERE b.user_id IS NULL"""
+    for user in cur.execute(query).fetchall():
+        user_id = user[0]
+        notifications_interval = 7 # week
+        next_notifications_date = (datetime.utcnow() + timedelta(days=notifications_interval))
+        created_at = datetime.utcnow()
+        update_date = created_at
+        cur.execute("INSERT INTO notifications(user_id, notifications_interval, next_notifications_date, created_at, update_date) VALUES(?, ?, ?, ?, ?)", 
+                    (user_id, notifications_interval, next_notifications_date, created_at, update_date))
+        db.commit()
+
 
 # Получаем список пользователей с доступами
 async def get_users_w_access() -> list:
@@ -96,6 +123,15 @@ def profile_exists(user_id: str) -> bool:
     else:
         profile_exists=True
     return profile_exists
+
+# Проверка, что есть строчка в таблице уведомлений
+def notification_exists(user_id: str) -> bool:
+    notif = cur.execute("SELECT 1 FROM notifications WHERE user_id == '{key}'".format(key=user_id)).fetchone()
+    if not notif:
+        notification_exists=False
+    else:
+        notification_exists=True
+    return notification_exists
 
 
 # Проверка, что у пользователя есть слова
@@ -126,6 +162,15 @@ async def add_access(users:  list, flg: int):
 async def create_profile(user_id: str, full_name: str):
     if not profile_exists(user_id):
         cur.execute("INSERT INTO profile(user_id, full_name) VALUES(?, ?)", (user_id, full_name))
+        db.commit()
+
+    if not notification_exists(user_id):
+        notifications_interval = 7 # week
+        next_notifications_date = (datetime.utcnow() + timedelta(days=notifications_interval))
+        created_at = datetime.utcnow()
+        update_date = created_at
+        cur.execute("INSERT INTO notifications(user_id, notifications_interval, next_notifications_date, created_at, update_date) VALUES(?, ?, ?, ?, ?)", 
+                    (user_id, notifications_interval, next_notifications_date, created_at, update_date))
         db.commit()
 
 
@@ -429,6 +474,60 @@ async def select_duplicate(user_id: str) -> str:
     else:
         message = message_texts.MSG_DUPLICATE.format(duplicates=duplicates)
     return message
+
+
+# Изменение группы у слова
+async def update_group(user_id: str) -> str:
+    pass
+
+
+# Интервал уведомлений для пользователя
+async def actual_user_notification_interval(user_id: str) -> str:
+    user_notifications = ""
+    query = """SELECT CASE WHEN notifications_interval IS NULL THEN 'Никогда' ELSE notifications_interval END AS notifications_interval
+                FROM notifications 
+                WHERE user_id == '{key}'"""
+    user_notifications = cur.execute(query.format(key=user_id)).fetchone()
+    if not user_notifications:
+        user_notifications = message_texts.KB_NOTIFICATIONS_NEVER
+    else:
+        user_notifications = str(user_notifications[0])
+    return user_notifications
+
+
+# Изменение частоты уведомлений
+async def update_notification_interval(user_id: str, new_notification_interval: str):
+    update_date = datetime.utcnow()
+    if new_notification_interval.isnumeric():
+        new_notification_interval = int(new_notification_interval)
+        next_notifications_date = update_date + timedelta(days=new_notification_interval)
+    else: 
+        new_notification_interval = None
+        next_notifications_date = None
+    query = """UPDATE notifications SET notifications_interval = ?, next_notifications_date = ?, update_date = ?
+            WHERE user_id == ?"""
+    cur.execute(query, (new_notification_interval, next_notifications_date, update_date, user_id))
+    db.commit()
+
+
+# Список пользователей, для отправки уведомлений
+async def user_list_to_send_notifications() -> list:
+    today = str(datetime.utcnow().date())
+    user_list = []
+    user_dict = {'user_id': str(),
+                'notifications_interval': int()}
+    query = """SELECT DISTINCT user_id, notifications_interval
+            FROM notifications 
+            WHERE notifications_interval IS NOT NULL
+            AND date(next_notifications_date) <= date('{today}')
+            ORDER BY user_id"""
+    # user = cur.execute(query.format(today=today)).fetchall()
+    # print(user)
+    for user in cur.execute(query.format(today=today)).fetchall():
+        user_dict['user_id'] = str(user[0])
+        user_dict['notifications_interval'] = str(user[1])
+        user_list.append(user_dict.copy())
+    return user_list
 
 
 # Любой запрос к БД через ТГ сообщение

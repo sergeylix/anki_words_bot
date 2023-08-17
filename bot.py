@@ -1,4 +1,5 @@
 import time
+from pytz import utc
 import logging
 import os
 
@@ -7,10 +8,12 @@ from aiogram import Bot, Dispatcher, executor, types, filters
 from aiogram.contrib.fsm_storage.memory import MemoryStorage
 from aiogram.dispatcher import FSMContext
 from aiogram.dispatcher.filters.state import State, StatesGroup
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
 import message_texts
 from sqlite import db_start, add_access, get_users_w_access, create_profile, words_exists,\
     insert_words, select_words, delete_word, delete_all_words, actual_user_group, all_user_groups, change_cards_group, cards,\
-    update_remind_date, words_num, select_duplicate, download_csv, any_query
+    update_remind_date, words_num, select_duplicate, download_csv, update_group, actual_user_notification_interval,\
+        update_notification_interval, user_list_to_send_notifications, any_query
 
 logging.basicConfig(level=logging.INFO)
 
@@ -38,6 +41,12 @@ class FSMCard(StatesGroup):
 class FSMDownload(StatesGroup):
     download_csv = State()
     download_csv_group_selection = State()
+
+class FSMChangeGroup(StatesGroup):
+    change_group = State()
+
+class FSMNotif(StatesGroup):
+    notifications = State()
 
 class FSMQuery(StatesGroup):
     execute_query = State()
@@ -105,6 +114,32 @@ inline_buttons_download.add(download_b1)
 inline_buttons_download.row(download_b2)
 inline_buttons_download.row(download_b3)
 
+# Для каких слов изменить группу
+inline_buttons_chenge_type = types.InlineKeyboardMarkup(row_width=4)
+chenge_type_b1 = types.InlineKeyboardButton(text=message_texts.KB_CHANGE_GR_ONE_WORD, callback_data='change_one')
+chenge_type_b2 = types.InlineKeyboardButton(text=message_texts.KB_CHANGE_GR_IN_GR, callback_data='change_group')
+chenge_type_b3 = types.InlineKeyboardButton(text=message_texts.KB_CHANGE_GR_ALL, callback_data='change_all')
+chenge_type_b4 = types.InlineKeyboardButton(text=message_texts.KB_CHANGE_GR_CANCEL, callback_data='cancel')
+
+inline_buttons_chenge_type.add(chenge_type_b1)
+inline_buttons_chenge_type.row(chenge_type_b2)
+inline_buttons_chenge_type.row(chenge_type_b3)
+inline_buttons_chenge_type.row(chenge_type_b4)
+
+
+# Настройка частоты уведомлений
+inline_buttons_notifications = types.InlineKeyboardMarkup(row_width=3)
+notifications_b1 = types.InlineKeyboardButton(text=message_texts.KB_NOTIFICATIONS_DAY, callback_data='notifications_set 1')
+notifications_b2 = types.InlineKeyboardButton(text=message_texts.KB_NOTIFICATIONS_WEEK, callback_data='notifications_set 7')
+notifications_b3 = types.InlineKeyboardButton(text=message_texts.KB_NOTIFICATIONS_MONTH, callback_data='notifications_set 30')
+notifications_b4 = types.InlineKeyboardButton(text=message_texts.KB_NOTIFICATIONS_NEVER, callback_data='notifications_set never')
+notifications_b5 = types.InlineKeyboardButton(text=message_texts.KB_NOTIFICATIONS_CONCEL, callback_data='cancel')
+
+inline_buttons_notifications.add(notifications_b1, notifications_b2)
+inline_buttons_notifications.row(notifications_b3, notifications_b4)
+inline_buttons_notifications.row(notifications_b5)
+
+
 # Обычные клавиатуры
 # buttons_download = types.ReplyKeyboardMarkup(resize_keyboard=True)
 # download_b1 = types.KeyboardButton(text=message_texts.KB_DOWNLOAD_ALL)
@@ -127,6 +162,7 @@ async def setup_bot_commands():
         types.BotCommand("delete_all", "Режим удаления всех слов"),
         types.BotCommand("cancel", "Отмена"),
         types.BotCommand("help", "Помощь"),
+        types.BotCommand("notifications", "Настройка уведомлений"),
         types.BotCommand("donate", "Поддержать проект")
     ]
     await bot.set_my_commands(bot_commands)
@@ -662,6 +698,95 @@ async def duplicates(message: types.Message, *args, **kwargs):
     await message.reply(answer_message, reply=False, parse_mode = 'HTML')
 
 
+# Изменение группы у слова
+@dp.message_handler(commands=['change_group'], state=None)
+@users_access
+async def change_group_for_words(message: types.Message, state: FSMContext, *args, **kwargs):
+    user_id = message.from_user.id
+    if not words_exists(user_id):
+        answer_message = message_texts.MSG_NO_WORDS
+        await message.reply(answer_message, reply=False)
+    else:
+        await FSMChangeGroup.change_group.set()
+        logging.info(f'Режим изменения группы у слов | {user_id=}, {time.asctime()}')
+        answer_message = message_texts.CHANGE_GROUP_FOR_WORDS
+        await message.reply(answer_message, reply=False, parse_mode = 'HTML', reply_markup=inline_buttons_chenge_type)
+        # update_group
+
+# ТУТ ДОБАВИТЬ ЛОГИКУ!!
+
+# Ответ на колбэк изменения группы у слова - отмена
+@dp.callback_query_handler(filters.Text(contains=['cancel']), state=FSMChangeGroup.change_group) 
+@users_access
+async def cancel_change_grpup(callback_query: types.CallbackQuery, state: FSMContext, *args, **kwargs):
+    user_id = callback_query.from_user.id
+    logging.info(f'Отмена | {user_id=}, {time.asctime()}')
+    await callback_query.message.delete_reply_markup() # удаляем инлайновую клавиатуру
+    await callback_query.answer() # завершаем коллбэк
+
+    answer_message = message_texts.CHANGE_GROUP_FOR_WORDS_CONCEL
+    await state.finish()
+    await callback_query.message.answer(answer_message)
+
+
+# Уведомления
+@dp.message_handler(commands=['notifications'], state=None)
+@users_access
+async def notifications(message: types.Message, *args, **kwargs):
+    user_id = message.from_user.id
+    logging.info(f'Настройка частоты уведомлений | {user_id=} {time.asctime()}')
+    await FSMNotif.notifications.set()
+    notification_interval = await actual_user_notification_interval(user_id)
+    if notification_interval.isnumeric():
+        notification_interval = int(notification_interval)
+        if notification_interval == 1: notification_freq = message_texts.KB_NOTIFICATIONS_DAY
+        elif notification_interval == 7: notification_freq = message_texts.KB_NOTIFICATIONS_WEEK
+        elif notification_interval == 30: notification_freq = message_texts.KB_NOTIFICATIONS_MONTH
+        else: notification_freq = ''
+    else: notification_freq = message_texts.KB_NOTIFICATIONS_NEVER
+    answer_message = message_texts.MSG_NOTIFICATIONS_INFO.format(notification_freq=notification_freq)
+    await message.reply(answer_message, reply=False, parse_mode = 'HTML', reply_markup=inline_buttons_notifications)
+
+# Ответ на колбэк настройка уведомлений - установка новой частоты
+@dp.callback_query_handler(filters.Text(contains=['notifications_set']), state=FSMNotif.notifications) 
+@users_access
+async def cancel_set_notifications(callback_query: types.CallbackQuery, state: FSMContext, *args, **kwargs):
+    user_id = callback_query.from_user.id
+    new_notification_interval = str(callback_query.data.split(' ', 1)[1])
+    logging.info(f'Устанавливаем новую частоту уведомлений | {user_id=}, {time.asctime()}')
+    await callback_query.message.delete_reply_markup() # удаляем инлайновую клавиатуру
+    await callback_query.answer() # завершаем коллбэк
+    await update_notification_interval(user_id, new_notification_interval) # Изменяем частоту в БД
+
+    if new_notification_interval.isnumeric():
+        new_notification_interval = int(new_notification_interval)
+        if new_notification_interval == 1: notification_freq = message_texts.KB_NOTIFICATIONS_DAY
+        elif new_notification_interval == 7: notification_freq = message_texts.KB_NOTIFICATIONS_WEEK
+        elif new_notification_interval == 30: notification_freq = message_texts.KB_NOTIFICATIONS_MONTH
+        else: notification_freq = ''
+        answer_message = message_texts.MSG_NOTIFICATIONS_SET.format(notification_freq=notification_freq)
+    else: 
+        notification_freq = message_texts.KB_NOTIFICATIONS_NEVER
+        answer_message = message_texts.MSG_NOTIFICATIONS_SET_NEVER.format(notification_freq=notification_freq)
+        
+    await state.finish()
+    await callback_query.message.answer(answer_message, parse_mode = 'HTML')
+
+
+# Ответ на колбэк настройка уведомлений - отмена
+@dp.callback_query_handler(filters.Text(contains=['cancel']), state=FSMNotif.notifications) 
+@users_access
+async def cancel_set_notifications(callback_query: types.CallbackQuery, state: FSMContext, *args, **kwargs):
+    user_id = callback_query.from_user.id
+    logging.info(f'Отмена | {user_id=}, {time.asctime()}')
+    await callback_query.message.delete_reply_markup() # удаляем инлайновую клавиатуру
+    await callback_query.answer() # завершаем коллбэк
+
+    answer_message = message_texts.MSG_CANCEL_NOTIFICATIONS
+    await state.finish()
+    await callback_query.message.answer(answer_message)
+
+
 # Выполнить любой SQL запрос
 @dp.message_handler(commands=['query'], state=None)
 @auth
@@ -733,8 +858,30 @@ async def donate_MSG_DONATE_USDC_ERC20_hendler(message: types.Message, *args, **
 async def echo(message: types.Message, *args, **kwargs):
     answer_message = message_texts.MSG_COMMAND_NOT_DEFINED
     await message.answer(answer_message)
-    # await message.answer(message.text)
 
+
+
+
+# расписание
+async def sched():
+    try:
+        answer_message = message_texts.MSG_NOTIFICATIONS
+        # user_list = await user_list_to_send_notifications()
+        user_list = [{'user_id': '91523724', 'notifications_interval': str(1)}] # заглушка для уведомлений только себе
+        for user in user_list:
+            if user['user_id'].isnumeric():
+                try:
+                    await bot.send_message(user['user_id'], answer_message)
+                    await update_notification_interval(user['user_id'], user['notifications_interval'])
+                except:
+                    pass
+    except: 
+        await bot.send_message('91523724', "Автор, ошибка в уведомлениях, почини!")
+
+
+scheduler = AsyncIOScheduler(timezone=utc)
+scheduler.add_job(sched, trigger='cron', hour='9', minute='20')
+scheduler.start()
 
 if __name__ == '__main__':
     executor.start_polling(dp, skip_updates=True, on_startup=on_startup)
