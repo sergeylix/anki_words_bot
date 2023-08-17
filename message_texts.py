@@ -178,7 +178,7 @@ MSG_NOTIFICATIONS_INFO = """🔔 Текущая частота уведомле�
 MSG_NOTIFICATIONS_SET = """🔔 Выбрана частота уведомлений:\n<b>{notification_freq}</b>"""
 MSG_NOTIFICATIONS_SET_NEVER = """🔕 Выбрана частота уведомлений: <b>{notification_freq}</b>"""
 
-MSG_NOTIFICATIONS = """🧠 Повторим или добавим новые слова?\n
+MSG_NOTIFICATIONS = """🧠 Повторим слова или добавим новые?\n
 /cards — перейти в режим карточек
 /notifications — настроить частоту уведомлений"""
 
@@ -240,8 +240,9 @@ KB_CHANGE_GR_IN_GR = """Изменить у группы"""
 KB_CHANGE_GR_ALL = """Изменить у всех слов"""
 KB_CHANGE_GR_CANCEL = """Отмена"""
 
-KB_NOTIFICATIONS_DAY = """Раз в день"""
-KB_NOTIFICATIONS_WEEK = """Раз в неделю"""
-KB_NOTIFICATIONS_MONTH = """Раз в месяц"""
+KB_NOTIFICATIONS_DAY = """Через день"""
+KB_NOTIFICATIONS_2DAYS = """Через два дня"""
+KB_NOTIFICATIONS_WEEK = """Через неделю"""
+KB_NOTIFICATIONS_MONTH = """Через месяц"""
 KB_NOTIFICATIONS_NEVER = """Никогда"""
 KB_NOTIFICATIONS_CONCEL = """Отмена"""

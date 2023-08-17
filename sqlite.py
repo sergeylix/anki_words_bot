@@ -512,17 +512,15 @@ async def update_notification_interval(user_id: str, new_notification_interval: 
 
 # Список пользователей, для отправки уведомлений
 async def user_list_to_send_notifications() -> list:
-    today = str(datetime.utcnow().date())
+    today = str(datetime.utcnow() + timedelta(seconds=1))
     user_list = []
     user_dict = {'user_id': str(),
                 'notifications_interval': int()}
     query = """SELECT DISTINCT user_id, notifications_interval
             FROM notifications 
             WHERE notifications_interval IS NOT NULL
-            AND date(next_notifications_date) <= date('{today}')
+            AND datetime(next_notifications_date) <= datetime('{today}')
             ORDER BY user_id"""
-    # user = cur.execute(query.format(today=today)).fetchall()
-    # print(user)
     for user in cur.execute(query.format(today=today)).fetchall():
         user_dict['user_id'] = str(user[0])
         user_dict['notifications_interval'] = str(user[1])

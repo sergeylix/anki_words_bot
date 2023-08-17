@@ -128,16 +128,18 @@ inline_buttons_chenge_type.row(chenge_type_b4)
 
 
 # Настройка частоты уведомлений
-inline_buttons_notifications = types.InlineKeyboardMarkup(row_width=3)
+inline_buttons_notifications = types.InlineKeyboardMarkup(row_width=4)
 notifications_b1 = types.InlineKeyboardButton(text=message_texts.KB_NOTIFICATIONS_DAY, callback_data='notifications_set 1')
-notifications_b2 = types.InlineKeyboardButton(text=message_texts.KB_NOTIFICATIONS_WEEK, callback_data='notifications_set 7')
-notifications_b3 = types.InlineKeyboardButton(text=message_texts.KB_NOTIFICATIONS_MONTH, callback_data='notifications_set 30')
-notifications_b4 = types.InlineKeyboardButton(text=message_texts.KB_NOTIFICATIONS_NEVER, callback_data='notifications_set never')
-notifications_b5 = types.InlineKeyboardButton(text=message_texts.KB_NOTIFICATIONS_CONCEL, callback_data='cancel')
+notifications_b2 = types.InlineKeyboardButton(text=message_texts.KB_NOTIFICATIONS_2DAYS, callback_data='notifications_set 2')
+notifications_b3 = types.InlineKeyboardButton(text=message_texts.KB_NOTIFICATIONS_WEEK, callback_data='notifications_set 7')
+notifications_b4 = types.InlineKeyboardButton(text=message_texts.KB_NOTIFICATIONS_MONTH, callback_data='notifications_set 30')
+notifications_b5 = types.InlineKeyboardButton(text=message_texts.KB_NOTIFICATIONS_NEVER, callback_data='notifications_set never')
+notifications_b6 = types.InlineKeyboardButton(text=message_texts.KB_NOTIFICATIONS_CONCEL, callback_data='cancel')
 
 inline_buttons_notifications.add(notifications_b1, notifications_b2)
 inline_buttons_notifications.row(notifications_b3, notifications_b4)
 inline_buttons_notifications.row(notifications_b5)
+inline_buttons_notifications.row(notifications_b6)
 
 
 # Обычные клавиатуры
@@ -740,6 +742,7 @@ async def notifications(message: types.Message, *args, **kwargs):
     if notification_interval.isnumeric():
         notification_interval = int(notification_interval)
         if notification_interval == 1: notification_freq = message_texts.KB_NOTIFICATIONS_DAY
+        elif notification_interval == 2: notification_freq = message_texts.KB_NOTIFICATIONS_2DAYS
         elif notification_interval == 7: notification_freq = message_texts.KB_NOTIFICATIONS_WEEK
         elif notification_interval == 30: notification_freq = message_texts.KB_NOTIFICATIONS_MONTH
         else: notification_freq = ''
@@ -761,6 +764,7 @@ async def cancel_set_notifications(callback_query: types.CallbackQuery, state: F
     if new_notification_interval.isnumeric():
         new_notification_interval = int(new_notification_interval)
         if new_notification_interval == 1: notification_freq = message_texts.KB_NOTIFICATIONS_DAY
+        elif new_notification_interval == 2: notification_freq = message_texts.KB_NOTIFICATIONS_2DAYS
         elif new_notification_interval == 7: notification_freq = message_texts.KB_NOTIFICATIONS_WEEK
         elif new_notification_interval == 30: notification_freq = message_texts.KB_NOTIFICATIONS_MONTH
         else: notification_freq = ''
@@ -880,7 +884,8 @@ async def sched():
 
 
 scheduler = AsyncIOScheduler(timezone=utc)
-scheduler.add_job(sched, trigger='cron', hour='10', minute='00')
+# scheduler.add_job(sched, trigger='cron', hour='10', minute='46') # тест
+scheduler.add_job(sched, trigger='cron', hour='16', minute='45') # прод
 scheduler.start()
 
 if __name__ == '__main__':
