@@ -533,16 +533,27 @@ async def user_list_to_send_notifications() -> list:
 # Любой запрос к БД через ТГ сообщение
 async def any_query(query:str) -> str:
     output = ""
-    query = query + '\n limit 20'
-    try:
-        for row in cur.execute(query).fetchall():
-            for count, value in enumerate(row):
-                if count == 0:
-                    output = output + str(row[count])
-                else:
-                    output = output + ' | ' + str(row[count])
-            output = output + "\n"
-        messege = message_texts.MSG_SQL_QUERY_RETURN.format(output=output)
-    except:
-        messege = message_texts.MSG_SQL_QUERY_ERROR
+    sql_command = query.split(" ", 1)[0]
+    if sql_command in ('UPDATE', 'INSERT', 'DELETE'):
+        try:
+            cur.execute(query)
+            db.commit()
+            messege = message_texts.MSG_SQL_QUERY_DONE
+        except:
+            messege = message_texts.MSG_SQL_QUERY_ERROR
+    elif sql_command in ('SELECT', 'WITH'):
+        query = query + '\n limit 20'
+        try:
+            for row in cur.execute(query).fetchall():
+                for count, value in enumerate(row):
+                    if count == 0:
+                        output = output + str(row[count])
+                    else:
+                        output = output + ' | ' + str(row[count])
+                output = output + "\n"
+            messege = message_texts.MSG_SQL_QUERY_RETURN.format(output=output)
+        except:
+            messege = message_texts.MSG_SQL_QUERY_ERROR
+    else:
+        messege = message_texts.MSG_SQL_QUERY_COMMAND_ERROR
     return messege
