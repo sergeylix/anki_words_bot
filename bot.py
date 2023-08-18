@@ -10,7 +10,7 @@ from aiogram.dispatcher import FSMContext
 from aiogram.dispatcher.filters.state import State, StatesGroup
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 import message_texts
-from sqlite import db_start, add_access, get_users_w_access, create_profile, words_exists,\
+from sqlite import db_start, get_auth_access, add_access, get_users_w_access, create_profile, words_exists,\
     insert_words, select_words, delete_word, delete_all_words, actual_user_group, all_user_groups, change_cards_group, cards,\
     update_remind_date, words_num, select_duplicate, download_csv, update_group, actual_user_notification_interval,\
         update_notification_interval, user_list_to_send_notifications, user_list_to_send_message, any_query
@@ -82,7 +82,7 @@ def users_access(func):
     async def wrapper(message, *args, **kwargs):
         global users_w_access
         if message['from']['id'] not in users_w_access:
-            return await message.reply("Access Denied.\nTo get access run - /access_request")
+            return await message.reply("Access Denied.\nTo get access run — /access_request")
         return await func(message, *args, **kwargs)
     
     return wrapper
@@ -176,14 +176,27 @@ async def setup_bot_commands():
 # Запрос доступа
 @dp.message_handler(commands=['access_request'])
 async def access_request(message: types.Message, *args, **kwargs):
+    global users_w_access
     user_id = message.from_user.id
     username = message.from_user.username
     user_full_name = message.from_user.full_name
 
-    logging.info(f'ЗАПРОС ДОСТУПА ДЛЯ {user_id} ! | {user_id=}, {username=}, {user_full_name=} {time.asctime()}')
-    await message.reply('Запрос отправлен. Ожидайте уведомления...', reply=False)
-    await bot.send_message('91523724', f"ЗАПРОС ДОСТУПА ДЛЯ:\n{user_id} | @{username} | {user_full_name}\n\nЧтобы открыть доступ - /access {user_id}\nЧтобы заблокировать - /block {user_id}") 
-
+    if user_id in users_w_access:
+        await message.reply('Доступ уже открыт.\n/help — чтобы посмотреть инструкцию и команды', reply=False)
+    else:
+        is_auth_access = await get_auth_access()
+        # Автоматический
+        if is_auth_access == 0:
+            logging.info(f'АВТОМАТИЧЕСКИ ОТКРЫТ ДОСТУП ДЛЯ {user_id} ! | {user_id=}, {username=}, {user_full_name=} {time.asctime()}')
+            await add_access([user_id], 1)
+            await message.reply('Доступ открыт! Чтобы начать — /start', reply=False)
+            await bot.send_message('91523724', f"АВТОМАТИЧЕСКИ ОТКРЫТ ДОСТУПА ДЛЯ:\n{user_id} | @{username} | {user_full_name}\n\nЧтобы заблокировать — /block {user_id}")
+        else:
+            # По согласованию с автором
+            logging.info(f'ЗАПРОС ДОСТУПА ДЛЯ {user_id} ! | {user_id=}, {username=}, {user_full_name=} {time.asctime()}')
+            await message.reply('Запрос отправлен. Ожидайте уведомления...', reply=False)
+            await bot.send_message('91523724', f"ЗАПРОС ДОСТУПА ДЛЯ:\n{user_id} | @{username} | {user_full_name}\n\nЧтобы открыть доступ — /access {user_id}\nЧтобы заблокировать — /block {user_id}") 
+    users_w_access = await get_users_w_access()
 
 # Выдача доступа
 @dp.message_handler(commands=['access'])
@@ -252,7 +265,7 @@ async def help_auth_hendler(message: types.Message, *args, **kwargs):
     user_id = message.from_user.id
     logging.info(f'Хэлп для автора | {user_id=} {time.asctime()}')
 
-    await bot.send_message(user_id, message_texts.MSG_AUTH_HELP)
+    await bot.send_message(user_id, message_texts.MSG_AUTH_HELP, parse_mode = 'HTML')
 
 
 # Выход из состояний
@@ -747,7 +760,7 @@ async def cancel_change_grpup(callback_query: types.CallbackQuery, state: FSMCon
     await callback_query.message.answer(answer_message)
 
 
-# Уведомления
+# Настройка уведомления
 @dp.message_handler(commands=['notifications'], state=None)
 @users_access
 async def notifications(message: types.Message, *args, **kwargs):
@@ -918,19 +931,19 @@ async def echo(message: types.Message, *args, **kwargs):
 
 # расписание
 async def sched():
-    try:
-        answer_message = message_texts.MSG_NOTIFICATIONS
-        # user_list = await user_list_to_send_notifications()
-        user_list = [{'user_id': '91523724', 'notifications_interval': str(1)}] # заглушка для уведомлений только себе
-        for user in user_list:
-            if user['user_id'].isnumeric():
-                try:
-                    await bot.send_message(user['user_id'], answer_message)
-                    await update_notification_interval(user['user_id'], user['notifications_interval'])
-                except:
-                    pass
-    except: 
-        await bot.send_message('91523724', "Автор, ошибка в уведомлениях, почини!")
+    # try:
+    answer_message = message_texts.MSG_NOTIFICATIONS
+    user_list = await user_list_to_send_notifications()
+    # user_list = [{'user_id': '91523724', 'notifications_interval': str(1)}] # заглушка для уведомлений только себе
+    for user in user_list:
+        if user['user_id'].isnumeric():
+            try:
+                await bot.send_message(user['user_id'], answer_message)
+                await update_notification_interval(user['user_id'], user['notifications_interval'])
+            except:
+                pass
+    # except: 
+    #     await bot.send_message('91523724', "Автор, ошибка в уведомлениях, почини!")
 
 
 scheduler = AsyncIOScheduler(timezone=utc)

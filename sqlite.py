@@ -29,6 +29,20 @@ async def db_start():
     cur.execute(query)
     db.commit()
 
+    # Создание таблицы с типом доступа: автоматический или нет
+    query = """CREATE TABLE IF NOT EXISTS auth_access(
+                    is_auth_access INTEGER DEFAULT "1" NOT NULL)"""
+    cur.execute(query)
+    db.commit()
+
+    # Добавляем в таблицу с доступами флаг 0 - т.е. автоматическое открытие доступа
+    query = """SELECT is_auth_access FROM auth_access LIMIT 1"""
+    is_auth_access = cur.execute(query).fetchone()
+    if not is_auth_access:
+        query = """INSERT INTO auth_access(is_auth_access) VALUES(0)"""
+        cur.execute(query)
+        db.commit()
+
     # В доступы добавляем автора бота
     auth_id = '91523724'
     if not access_exists(auth_id):
@@ -102,6 +116,12 @@ async def get_users_w_access() -> list:
         for user in cur.execute(query.format(flg=1)).fetchall():
             users_w_access.append(int(user[0]))
         return users_w_access
+
+# Получаем тип 
+async def get_auth_access() -> int:
+    query = """SELECT is_auth_access FROM auth_access LIMIT 1"""
+    is_auth_access = cur.execute(query.format(flg=1)).fetchone()[0]
+    return int(is_auth_access)
 
 
 # Проверка, что существует доступ у пользователя
@@ -520,8 +540,8 @@ async def user_list_to_send_notifications() -> list:
             FROM notifications n
             INNER JOIN access a ON a.user_id = n.user_id AND a.access = 1
             WHERE notifications_interval IS NOT NULL
-            AND datetime(next_notifications_date) <= datetime('{today}')
-            ORDER BY user_id"""
+            AND datetime(n.next_notifications_date) <= datetime('{today}')
+            ORDER BY n.user_id"""
     for user in cur.execute(query.format(today=today)).fetchall():
         user_dict['user_id'] = str(user[0])
         user_dict['notifications_interval'] = str(user[1])
@@ -532,9 +552,9 @@ async def user_list_to_send_notifications() -> list:
 # Список пользователей, для отправки сообщения от автора
 async def user_list_to_send_message() -> list:
     user_list = []
-    query = """SELECT DISTINCT p.user_id
-            FROM profile p
-            INNER JOIN access a ON a.user_id = p.user_id AND a.access = 1"""
+    query = """SELECT DISTINCT user_id
+            FROM access
+            WHERE access = 1"""
     for user in cur.execute(query).fetchall():
         user_list.append(user[0])
     return user_list
