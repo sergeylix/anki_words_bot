@@ -13,7 +13,7 @@ import message_texts
 from sqlite import db_start, add_access, get_users_w_access, create_profile, words_exists,\
     insert_words, select_words, delete_word, delete_all_words, actual_user_group, all_user_groups, change_cards_group, cards,\
     update_remind_date, words_num, select_duplicate, download_csv, update_group, actual_user_notification_interval,\
-        update_notification_interval, user_list_to_send_notifications, any_query
+        update_notification_interval, user_list_to_send_notifications, user_list_to_send_message, any_query
 
 logging.basicConfig(level=logging.INFO)
 
@@ -47,6 +47,9 @@ class FSMChangeGroup(StatesGroup):
 
 class FSMNotif(StatesGroup):
     notifications = State()
+
+class FSMSendForAll(StatesGroup):
+    send_for_all = State()
 
 class FSMQuery(StatesGroup):
     execute_query = State()
@@ -807,6 +810,35 @@ async def cancel_set_notifications(callback_query: types.CallbackQuery, state: F
     answer_message = message_texts.MSG_CANCEL_NOTIFICATIONS
     await state.finish()
     await callback_query.message.answer(answer_message)
+
+
+# Отправка сообщения всем пользователям
+@dp.message_handler(commands=['send_for_all'], state=None)
+@auth
+async def send_for_all(message: types.Message, *args, **kwargs):
+    user_id = message.from_user.id
+    logging.info(f'Переход в режим отправки сообщений всем пользователям | {user_id=}, {time.asctime()}')
+    await FSMSendForAll.send_for_all.set()
+    answer_message = message_texts.MSG_SEND_FOR_ALL
+    await message.reply(answer_message, reply=False)
+
+# Ловим сообщеине, которое нужно отправить всем и отправляем его
+@dp.message_handler(state=FSMSendForAll.send_for_all)
+@auth
+async def execute_send_for_all(message: types.Message, state: FSMContext, *args, **kwargs):
+    user_id = message.from_user.id
+    logging.info(f'Отправляем сообщение | {user_id=}, {time.asctime()}')
+    message_for_all = message.text
+    user_list = await user_list_to_send_message()
+    list_not_delivered = []
+    for user_id in user_list:
+        try:
+            await bot.send_message(user_id, message_for_all, parse_mode = 'HTML')
+        except:
+            list_not_delivered.append(user_id)
+    answer_message = message_texts.MSG_SEND_FOR_ALL_SUCCESS.format(not_delivered=list_not_delivered)
+    await message.reply(answer_message, reply=False)
+    await state.finish()
 
 
 # Выполнить любой SQL запрос

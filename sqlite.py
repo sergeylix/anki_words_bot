@@ -529,6 +529,17 @@ async def user_list_to_send_notifications() -> list:
     return user_list
 
 
+# Список пользователей, для отправки сообщения от автора
+async def user_list_to_send_message() -> list:
+    user_list = []
+    query = """SELECT DISTINCT p.user_id
+            FROM profile p
+            INNER JOIN access a ON a.user_id = p.user_id AND a.access = 1"""
+    for user in cur.execute(query).fetchall():
+        user_list.append(user[0])
+    return user_list
+
+
 # Любой запрос к БД через ТГ сообщение
 async def any_query(query:str) -> str:
     output = ""
