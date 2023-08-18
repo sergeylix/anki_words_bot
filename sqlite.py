@@ -166,6 +166,7 @@ def words_exists(user_id: str) -> bool:
 # Выдача прав пользователю
 async def add_access(users:  list, flg: int):
     for user_id in users:
+        user_id = str(user_id)
         if not access_exists(user_id) and user_id.isnumeric():
             query = """INSERT INTO access(user_id, access) VALUES('{key}', {flg})"""
             cur.execute(query.format(key=user_id, flg=flg))
@@ -563,7 +564,7 @@ async def user_list_to_send_message() -> list:
 # Любой запрос к БД через ТГ сообщение
 async def any_query(query:str) -> str:
     output = ""
-    sql_command = query.split(" ", 1)[0]
+    sql_command = query.split(" ", 1)[0].upper()
     if sql_command in ('UPDATE', 'INSERT', 'DELETE'):
         try:
             cur.execute(query)
