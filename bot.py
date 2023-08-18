@@ -285,6 +285,13 @@ async def cancel_handler(message: types.Message, state: FSMContext, *args, **kwa
     await message.reply(answer_message, reply=False)
 
 
+# Обновление следующей даты уведомления
+async def update_next_notification(user_id: str):
+    notification_interval = await actual_user_notification_interval(user_id)
+    if notification_interval.isnumeric():
+        await update_notification_interval(user_id, notification_interval) # Изменяем частоту в БД
+
+
 # Добавление слова
 @dp.message_handler(state={None, FSMDelete.word_for_delete, 
                            FSMDeleteAll.delete_all, 
@@ -304,6 +311,9 @@ async def word_insert(message: types.Message, state: FSMContext, *args, **kwargs
     await create_profile(user_id, user_full_name)
     await insert_words(user_id, user_message)
     await message.reply(answer_message)
+
+    # Обновляем след. дату уведомления
+    await update_next_notification(user_id)
 
     # выход из всех режимов, если они были включены
     current_state = await state.get_state()
@@ -558,6 +568,9 @@ async def load_cards(message: types.Message, state: FSMContext, *args, **kwargs)
                                          'index_num': index_num, 
                                          'chat_id': chat_id, 
                                          'cards_send_message': cards_send_message}
+    
+    # Обновляем след. дату уведомления
+    await update_next_notification(user_id)
 
 # Ответ на колбэк показываем перевод
 @dp.callback_query_handler(filters.Text(contains=['translation']), state=FSMCard.word_for_reminder) 
@@ -746,8 +759,11 @@ async def notifications(message: types.Message, *args, **kwargs):
         elif notification_interval == 7: notification_freq = message_texts.KB_NOTIFICATIONS_WEEK
         elif notification_interval == 30: notification_freq = message_texts.KB_NOTIFICATIONS_MONTH
         else: notification_freq = ''
-    else: notification_freq = message_texts.KB_NOTIFICATIONS_NEVER
-    answer_message = message_texts.MSG_NOTIFICATIONS_INFO.format(notification_freq=notification_freq)
+        add_info = message_texts.MSG_NOTIFICATIONS_ADD_INFO
+    else: 
+        notification_freq = message_texts.KB_NOTIFICATIONS_NEVER
+        add_info = ""
+    answer_message = message_texts.MSG_NOTIFICATIONS_INFO.format(notification_freq=notification_freq, add_info=add_info)
     await message.reply(answer_message, reply=False, parse_mode = 'HTML', reply_markup=inline_buttons_notifications)
 
 # Ответ на колбэк настройка уведомлений - установка новой частоты
@@ -768,10 +784,12 @@ async def cancel_set_notifications(callback_query: types.CallbackQuery, state: F
         elif new_notification_interval == 7: notification_freq = message_texts.KB_NOTIFICATIONS_WEEK
         elif new_notification_interval == 30: notification_freq = message_texts.KB_NOTIFICATIONS_MONTH
         else: notification_freq = ''
-        answer_message = message_texts.MSG_NOTIFICATIONS_SET.format(notification_freq=notification_freq)
+        add_info = message_texts.MSG_NOTIFICATIONS_ADD_INFO
+        answer_message = message_texts.MSG_NOTIFICATIONS_SET.format(notification_freq=notification_freq, add_info=add_info)
     else: 
         notification_freq = message_texts.KB_NOTIFICATIONS_NEVER
-        answer_message = message_texts.MSG_NOTIFICATIONS_SET_NEVER.format(notification_freq=notification_freq)
+        add_info = ""
+        answer_message = message_texts.MSG_NOTIFICATIONS_SET_NEVER.format(notification_freq=notification_freq, add_info=add_info)
         
     await state.finish()
     await callback_query.message.answer(answer_message, parse_mode = 'HTML')

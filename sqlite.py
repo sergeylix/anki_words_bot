@@ -79,8 +79,7 @@ async def db_start():
     cur.execute(query)
     db.commit()
 
-    # Получаем список пользователей, у которых нет записи в таблице уведомлений
-    users_to_notif = []
+    # Получаем список пользователей, у которых нет записи в таблице уведомлений и добавляем им запись
     query = """SELECT a.user_id 
                     FROM profile a
                     LEFT JOIN notifications b ON a.user_id = b.user_id
@@ -516,8 +515,10 @@ async def user_list_to_send_notifications() -> list:
     user_list = []
     user_dict = {'user_id': str(),
                 'notifications_interval': int()}
-    query = """SELECT DISTINCT user_id, notifications_interval
-            FROM notifications 
+    query = """SELECT DISTINCT n.user_id
+                             , n.notifications_interval
+            FROM notifications n
+            INNER JOIN access a ON a.user_id = n.user_id AND a.access = 1
             WHERE notifications_interval IS NOT NULL
             AND datetime(next_notifications_date) <= datetime('{today}')
             ORDER BY user_id"""
