@@ -318,7 +318,10 @@ async def all_user_groups(user_id: str, state) -> dict:
                    'min_group_num': int(), 
                    'max_group_num': int()}
     i = int(0)
-    query = """SELECT * FROM (
+    query = """SELECT category
+                    ,CASE WHEN num IS NULL THEN 0 ELSE num END AS num
+                    ,num_total
+                FROM (
                     SELECT '{category}' as category
                         ,SUM(CASE WHEN reminder_date < strftime('%Y-%m-%d %H:%M:%S','now') THEN 1 ELSE 0 END) as num
                         ,COUNT(word_id) as num_total
