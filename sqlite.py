@@ -194,6 +194,20 @@ async def create_profile(user_id: str, full_name: str):
         db.commit()
 
 
+# Добавление базовых слов
+async def add_basic_words(user_id: str):
+    basic_words = message_texts.MSG_ONBOARDING_BASIC_WORDS
+    for row in basic_words.split('\n'):
+        words = [word.strip() for word in row.split('=', 2)]
+        reminder_date = (datetime.utcnow() + timedelta(days=0))
+        cur.execute("INSERT INTO words(user_id, word, translation, category, reminder_date) VALUES(?, ?, ?, ?, ?)", (user_id, words[0], words[1], words[2], reminder_date))
+        db.commit()
+
+# Удаление базовых слов
+async def del_basic_words(user_id: str):
+        cur.execute("DELETE FROM words WHERE user_id = '{key}' AND category = 'onboarding'".format(key=user_id))
+        db.commit()
+
 # Добавление слова
 async def insert_words(user_id: str, user_message: str):
     # words = [word.strip() for word in user_message.split('=', 1)]

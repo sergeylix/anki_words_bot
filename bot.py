@@ -11,7 +11,8 @@ from aiogram.dispatcher.filters.state import State, StatesGroup
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 import message_texts
 from sqlite import db_start, get_auth_access, add_access, get_users_w_access, create_profile, words_exists,\
-    insert_words, select_words, delete_word, delete_all_words, actual_user_group, all_user_groups, change_cards_group, cards,\
+    add_basic_words, del_basic_words, insert_words, select_words, delete_word, delete_all_words,\
+    actual_user_group, all_user_groups, change_cards_group, cards,\
     update_remind_date, words_num, select_duplicate, download_csv, update_group, actual_user_notification_interval,\
         update_notification_interval, user_list_to_send_notifications, user_list_to_send_message, any_query
 
@@ -166,8 +167,8 @@ async def setup_bot_commands():
         types.BotCommand("delete", "Режим удаления одного слова"),
         types.BotCommand("delete_all", "Режим удаления всех слов"),
         types.BotCommand("cancel", "Отмена"),
-        types.BotCommand("help", "Помощь"),
         types.BotCommand("notifications", "Настройка уведомлений"),
+        types.BotCommand("help", "Помощь"),
         types.BotCommand("donate", "Поддержать проект")
     ]
     await bot.set_my_commands(bot_commands)
@@ -246,6 +247,7 @@ async def start_hendler(message: types.Message, *args, **kwargs):
     await create_profile(user_id, user_full_name)
     await message.reply(f'Привет, {user_name}!', reply=False)
     await bot.send_message(user_id, message_texts.MSG_START, parse_mode = 'HTML')
+    await bot.send_message(user_id, message_texts.MSG_ONBOARDING_START, parse_mode = 'HTML')
 
 
 # Хэлп
@@ -256,6 +258,36 @@ async def help_hendler(message: types.Message, *args, **kwargs):
     logging.info(f'Хэлп | {user_id=} {time.asctime()}')
 
     await bot.send_message(user_id, message_texts.MSG_HELP, parse_mode = 'HTML')
+
+
+# Онбординг - инстркция
+@dp.message_handler(commands=['onboarding'])
+@users_access
+async def onboarding_info(message: types.Message, *args, **kwargs):
+    user_id = message.from_user.id
+    logging.info(f'Онбординг - инстркция | {user_id=} {time.asctime()}')
+
+    await bot.send_message(user_id, message_texts.MSG_ONBOARDING, parse_mode = 'HTML')
+
+# Онбординг - добавление базовых слов
+@dp.message_handler(commands=['add_basic_words'])
+@users_access
+async def onboarding_add_basic_words(message: types.Message, *args, **kwargs):
+    user_id = message.from_user.id
+    logging.info(f'Онбординг - добавление базовых слов | {user_id=} {time.asctime()}')
+
+    await add_basic_words(user_id)
+    await bot.send_message(user_id, message_texts.MSG_ONBOARDING_ADD_BASIC_WORDS, parse_mode = 'HTML')
+
+# Онбординг - удаление базовых слов
+@dp.message_handler(commands=['del_basic_words'])
+@users_access
+async def onboarding_del_basic_words(message: types.Message, *args, **kwargs):
+    user_id = message.from_user.id
+    logging.info(f'Онбординг - удаление базовых слов | {user_id=} {time.asctime()}')
+
+    await del_basic_words(user_id)
+    await bot.send_message(user_id, message_texts.MSG_ONBOARDING_DEL_BASIC_WORDS, parse_mode = 'HTML')
 
 
 # Просмотр команд для автора
