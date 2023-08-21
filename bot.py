@@ -160,14 +160,14 @@ inline_buttons_notifications.row(notifications_b6)
 async def setup_bot_commands():
     bot_commands = [
         types.BotCommand("cards", "Режим карточек"),
-        types.BotCommand("words", "Последние 15 слов"),
-        types.BotCommand("words_num", "Количество слов"),
-        types.BotCommand("duplicates", "Дублирующиеся слова"),
+        types.BotCommand("words", "Посмотреть последние 15 слов"),
+        types.BotCommand("words_num", "Посмотреть количество слов"),
+        types.BotCommand("duplicates", "Посмотреть дублирующиеся слова"),
         types.BotCommand("download_csv", "Скачать все слова в csv"),
         types.BotCommand("delete", "Режим удаления одного слова"),
         types.BotCommand("delete_all", "Режим удаления всех слов"),
-        types.BotCommand("cancel", "Отмена"),
-        types.BotCommand("notifications", "Настройка уведомлений"),
+        types.BotCommand("cancel", "Отмена/выход из режимов"),
+        types.BotCommand("notifications", "Настроить уведомлений"),
         types.BotCommand("help", "Помощь"),
         types.BotCommand("donate", "Поддержать проект")
     ]
@@ -260,6 +260,16 @@ async def help_hendler(message: types.Message, *args, **kwargs):
     await bot.send_message(user_id, message_texts.MSG_HELP, parse_mode = 'HTML')
 
 
+# Вывести все команжы
+@dp.message_handler(commands=['commands'])
+@users_access
+async def all_commands(message: types.Message, *args, **kwargs):
+    user_id = message.from_user.id
+    logging.info(f'Вывести все команды | {user_id=} {time.asctime()}')
+
+    await bot.send_message(user_id, message_texts.MSG_COMANDS, parse_mode = 'HTML')
+
+
 # Онбординг - инстркция
 @dp.message_handler(commands=['onboarding'])
 @users_access
@@ -269,13 +279,18 @@ async def onboarding_info(message: types.Message, *args, **kwargs):
 
     await bot.send_message(user_id, message_texts.MSG_ONBOARDING, parse_mode = 'HTML')
 
+    # отправка видео инструкции
+    # await message.answer_video(user_id, )
+
 # Онбординг - добавление базовых слов
 @dp.message_handler(commands=['add_basic_words'])
 @users_access
 async def onboarding_add_basic_words(message: types.Message, *args, **kwargs):
     user_id = message.from_user.id
+    user_full_name = message.from_user.full_name
     logging.info(f'Онбординг - добавление базовых слов | {user_id=} {time.asctime()}')
 
+    await create_profile(user_id, user_full_name)
     await add_basic_words(user_id)
     await bot.send_message(user_id, message_texts.MSG_ONBOARDING_ADD_BASIC_WORDS, parse_mode = 'HTML')
 

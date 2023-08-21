@@ -72,7 +72,7 @@ async def db_start():
     cur.execute(query)
     db.commit()
 
-    # Создание таблицы группами
+    # Создание таблицы с группами
     query = """CREATE TABLE IF NOT EXISTS word_groups(
                     user_id TEXT PRIMARY KEY,
                     actual_category TEXT,
@@ -210,6 +210,7 @@ async def del_basic_words(user_id: str):
 
 # Добавление слова
 async def insert_words(user_id: str, user_message: str):
+    user_message = user_message.replace("\n"," ")
     # words = [word.strip() for word in user_message.split('=', 1)]
     words = [word.strip() for word in user_message.split('=', 2)]
     if len(words) == 2:
@@ -280,21 +281,24 @@ async def words_num(user_id: str) -> str:
 # Удаление слова
 async def delete_word(user_id: str, state) -> str:
     async with state.proxy() as data:
-        query = """SELECT 1 
-                    FROM words 
-                    WHERE user_id == '{key}'
-                    AND (translation == '{word}' OR word == '{word}')"""
-        word_for_del = cur.execute(query.format(key=user_id, word=data['word_for_delete'])).fetchone()
-        if not word_for_del:
-            message = message_texts.MSG_DELETE_ERROR
-        else:
-            query = """DELETE 
+        try:
+            query = """SELECT 1 
                         FROM words 
                         WHERE user_id == '{key}'
                         AND (translation == '{word}' OR word == '{word}')"""
-            cur.execute(query.format(key=user_id, word=data['word_for_delete']))
-            db.commit()
-            message = message_texts.MSG_DELETE_DELETED
+            word_for_del = cur.execute(query.format(key=user_id, word=data['word_for_delete'])).fetchone()
+            if not word_for_del:
+                message = message_texts.MSG_DELETE_ERROR
+            else:
+                query = """DELETE 
+                            FROM words 
+                            WHERE user_id == '{key}'
+                            AND (translation == '{word}' OR word == '{word}')"""
+                cur.execute(query.format(key=user_id, word=data['word_for_delete']))
+                db.commit()
+                message = message_texts.MSG_DELETE_DELETED
+        except:
+            message = message_texts.MSG_DELETE_ERROR_DB
     return message
 
 
