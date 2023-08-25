@@ -3,6 +3,5 @@ __pycache__/
 sql_scripts/
 _cover/
 _export/
-*.csv
 .env
 anki_words
