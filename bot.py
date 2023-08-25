@@ -3,17 +3,20 @@ from pytz import utc
 import logging
 import os
 
+import pandas as pd
 from dotenv import load_dotenv
 from aiogram import Bot, Dispatcher, executor, types, filters
+from aiogram.types.input_file import InputFile
 from aiogram.contrib.fsm_storage.memory import MemoryStorage
 from aiogram.dispatcher import FSMContext
 from aiogram.dispatcher.filters.state import State, StatesGroup
+import asyncio
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 import message_texts
-from sqlite import db_start, get_auth_access, add_access, get_users_w_access, create_profile, words_exists,\
-    add_basic_words, del_basic_words, insert_words, select_words, delete_word, delete_all_words,\
+from sqlite import db_start, get_files, add_file_row, update_file_row, get_auth_access, add_access, get_users_w_access,\
+    create_profile, words_exists, add_basic_words, del_basic_words, insert_words, select_words, delete_word, delete_all_words,\
     actual_user_group, all_user_groups, change_cards_group, cards,\
-    update_remind_date, words_num, select_duplicate, download_csv, update_group, actual_user_notification_interval,\
+    update_remind_date, words_num, select_duplicate, upload_csv, download_csv, update_group, actual_user_notification_interval,\
         update_notification_interval, user_list_to_send_notifications, user_list_to_send_message, any_query
 
 logging.basicConfig(level=logging.INFO)
@@ -39,6 +42,9 @@ class FSMCard(StatesGroup):
     word_for_reminder = State()
     change_cards_group = State()
 
+class FSMUpload(StatesGroup):
+    upload_csv = State()
+
 class FSMDownload(StatesGroup):
     download_csv = State()
     download_csv_group_selection = State()
@@ -60,6 +66,7 @@ users_w_access = [] # список пользователей с доступа�
 async def on_startup(_):
     await db_start()
     await setup_bot_commands()
+    await upload_files()
 
     global users_w_access
     users_w_access = await get_users_w_access()
@@ -107,6 +114,16 @@ b6 = types.InlineKeyboardButton(text='90', callback_data='remind in 90 day')
 
 inline_buttons_reminder.add(b3, b4, b5, b6)
 inline_buttons_reminder.row(b2)
+
+# Загружаем слова из CSV
+inline_buttons_upload = types.InlineKeyboardMarkup(row_width=3)
+upload_b1 = types.InlineKeyboardButton(text=message_texts.KB_UPLOAD_YES, callback_data='upload_yes')
+upload_b2 = types.InlineKeyboardButton(text=message_texts.KB_UPLOAD_NO, callback_data='upload_no')
+upload_b3 = types.InlineKeyboardButton(text=message_texts.KB_UPLOAD_CANCEL, callback_data='cancel')
+
+inline_buttons_upload.add(upload_b1)
+inline_buttons_upload.row(upload_b2)
+inline_buttons_upload.row(upload_b3)
 
 # Что скачать
 inline_buttons_download = types.InlineKeyboardMarkup(row_width=3)
@@ -163,15 +180,73 @@ async def setup_bot_commands():
         types.BotCommand("words", "Посмотреть последние 15 слов"),
         types.BotCommand("words_num", "Посмотреть количество слов"),
         types.BotCommand("duplicates", "Посмотреть дублирующиеся слова"),
-        types.BotCommand("download_csv", "Скачать все слова в csv"),
+        types.BotCommand("import_export", "Загрузить или скачать слова"),
         types.BotCommand("delete", "Режим удаления одного слова"),
         types.BotCommand("delete_all", "Режим удаления всех слов"),
-        types.BotCommand("cancel", "Отмена/выход из режимов"),
+        types.BotCommand("cancel", "Отмена"),
         types.BotCommand("notifications", "Настроить уведомлений"),
         types.BotCommand("help", "Помощь"),
         types.BotCommand("donate", "Поддержать проект")
     ]
     await bot.set_my_commands(bot_commands)
+
+
+# Загрузка файлов в ТГ для дальнейшей отправки
+async def upload_files():
+    auth_id = '91523724'
+    file_names_in_db = []
+    files_in_db_list = []
+    files_in_db_dict = {'file_id': str(),
+                        'file_name': str()}
+    file_list = [
+                    {'file_name': 'template.csv',
+                     'file_description': 'template for uploading csv',
+                     'file_path': 'bot_files/csv/'
+                    }
+                ]
+    file_rows_in_db = await get_files()
+    for row in file_rows_in_db:
+        file_names_in_db.append(row[1])
+        files_in_db_dict['file_id'] = row[0]
+        files_in_db_dict['file_name'] = row[1]
+        files_in_db_list.append(files_in_db_dict.copy())
+    
+    for value in file_list:
+        file_name = value['file_name']
+        file_description = value['file_description']
+        file_path = value['file_path'] + value['file_name']
+        if file_name not in file_names_in_db:
+            file = InputFile(file_path, filename=file_name)
+            answer_message = f'Добавлен файл <b>{file_name}</b> на сервер ТГ'
+            send_to_auth = await bot.send_document(chat_id=auth_id, document=file, caption=answer_message, parse_mode = 'HTML', disable_notification=True)
+            file_id = str(send_to_auth.document.file_id)
+            await add_file_row(file_id, file_name, file_description, file_path)
+        else:
+            for f in files_in_db_list:
+                if file_name == f['file_name']:
+                    file_id = f['file_id']
+                else: 
+                    file_id = None
+            try:
+                answer_message = f'Файл <b>{file_name}</b> существует на сервере ТГ'
+                send_to_auth = await bot.send_document(chat_id=auth_id, document=file_id, caption=answer_message, parse_mode = 'HTML', disable_notification=True)
+                await asyncio.sleep(.5)
+                await bot.delete_message(auth_id, send_to_auth.message_id)
+            except:
+                answer_message = f'Файл <b>{file_name}</b> существует на сервере ТГ, обновлен <code>file_id</code>'
+                file = InputFile(file_path, filename=file_name)
+                send_to_auth = await bot.send_document(chat_id=auth_id, document=file, caption=answer_message, parse_mode = 'HTML', disable_notification=True)
+                file_id_new = str(send_to_auth.document.file_id)
+                await update_file_row(file_name, file_id_new)
+
+
+# Удаление файла на VPS сервере
+async def delete_file_on_server(user_id, fp: str):
+    if os.path.isfile(fp):
+        os.remove(fp)
+        logging.info(f'{fp} deleted. | {user_id=}, {time.asctime()}')
+    else:
+        logging.info(f'{fp} not found. | {user_id=}, {time.asctime()}')
 
 
 # Запрос доступа
@@ -336,6 +411,17 @@ async def cancel_handler(message: types.Message, state: FSMContext, *args, **kwa
         answer_message = message_texts.MSG_CANCEL_REMINDER
     elif current_state == 'FSMCard:change_cards_group':
         answer_message = message_texts.MSG_CANCEL_CHANGE_GROUP
+    elif current_state == 'FSMUpload:upload_csv':
+        try:
+            async with state.proxy() as data: # достаем id чата и сообщения, чтобы скрыть инлайновую клавиатуру
+                chat_id = data['upload_csv']['chat_id']
+                message_id = data['upload_csv']['message_id']
+                fp = data['upload_csv']['fp']
+                await delete_file_on_server(user_id, fp) # удаляем скаченный файл
+            await bot.edit_message_reply_markup(chat_id = chat_id, message_id = message_id, reply_markup = None) # удаляем инлайновую клавиатуру
+        except:
+            pass
+        answer_message = message_texts.MSG_CANCEL_UPLOAD_CSV
     elif current_state == 'FSMDownload:download_csv':
         async with state.proxy() as data: # достаем id чата и сообщения, чтобы скрыть инлайновую клавиатуру
             chat_id = data['download_csv']['chat_id']
@@ -357,7 +443,8 @@ async def update_next_notification(user_id: str):
 
 # Добавление слова
 @dp.message_handler(state={None, FSMDelete.word_for_delete, 
-                           FSMDeleteAll.delete_all, 
+                           FSMDeleteAll.delete_all,
+                           FSMUpload.upload_csv,
                            FSMDownload.download_csv, 
                            FSMDownload.download_csv_group_selection,
                            FSMCard.word_for_reminder, 
@@ -394,6 +481,18 @@ async def word_insert(message: types.Message, state: FSMContext, *args, **kwargs
         elif current_state in ['FSMDelete:word_for_delete','FSMDeleteAll:delete_all']:
             answer_message = message_texts.MSG_CANCEL_DELETE
             logging.info(f'Вышел из режима удаления | {user_id=}, {time.asctime()}')
+        elif current_state == 'FSMUpload:upload_csv':
+            try:
+                async with state.proxy() as data: # достаем id чата и сообщения, чтобы скрыть инлайновую клавиатуру
+                    chat_id = data['upload_csv']['chat_id']
+                    message_id = data['upload_csv']['message_id']
+                    fp = data['upload_csv']['fp']
+                    await delete_file_on_server(user_id, fp) # удаляем скаченный файл
+                await bot.edit_message_reply_markup(chat_id = chat_id, message_id = message_id, reply_markup = None) # удаляем инлайновую клавиатуру
+            except:
+                pass
+            answer_message = message_texts.MSG_CANCEL_UPLOAD_CSV
+            logging.info(f'Вышел из загрузки csv | {user_id=}, {time.asctime()}')
         elif current_state == 'FSMDownload:download_csv':
             async with state.proxy() as data: # достаем id чата и сообщения, чтобы скрыть инлайновую клавиатуру
                 chat_id = data['download_csv']['chat_id']
@@ -489,7 +588,165 @@ async def print_my_words_num(message: types.Message, *args, **kwargs):
     await message.reply(answer_message, reply=False, parse_mode = 'HTML')
 
 
-# Скачиваем слова в csv
+# Импорт экспорт
+@dp.message_handler(commands=['import_export'], state=None)
+@users_access
+async def import_export(message: types.Message, *args, **kwargs):
+    user_id = message.from_user.id
+    logging.info(f'Импорт экспорт | {user_id=}, {time.asctime()}')
+    answer_message = message_texts.MSG_IMPORT_EXPORT
+    await message.reply(answer_message, reply=False, parse_mode = 'HTML')
+
+
+# Загрузка слов пользователя в бота через csv
+@dp.message_handler(commands=['upload_csv'], state=None)
+@users_access
+async def upload(message: types.Message, state: FSMContext, *args, **kwargs):
+    user_id = message.from_user.id
+    logging.info(f'Пользователь переходит в режим загрузки слов из csv | {user_id=}, {time.asctime()}')
+    answer_message = message_texts.MSG_UPLOAD_CSV
+    await message.reply(answer_message, reply=False, parse_mode = 'HTML', disable_web_page_preview=True)
+    try:
+        file_id = await get_files(file_name='template.csv')
+        if not file_id: 
+            file_id = None
+        else: 
+            file_id = file_id[0]
+        answer_message = message_texts.MSG_UPLOAD_CSV_TEMPLATE
+        await bot.send_document(chat_id=user_id, document=file_id, caption=answer_message, parse_mode = 'HTML')
+    except:
+        logging.info(f'Ошибка при отправке шаблона CSV файла | {user_id=}, {time.asctime()}')
+    await FSMUpload.upload_csv.set()
+
+# Загружаем слова пользователя в бота через csv - проверяем и готовим превью
+@dp.message_handler(content_types=['document','text'], state=FSMUpload.upload_csv)
+@users_access
+async def file_processing(message: types.Message, state: FSMContext, *args, **kwargs):
+    user_id = message.from_user.id
+    logging.info(f'Обрабатываем полученный файл | {user_id=}, {time.asctime()}')
+
+    if document := message.document:
+        if document.file_name[-4:] == '.csv':
+            if document.file_size <= 20971520:
+                answer_message = message_texts.MSG_UPLOAD_CSV_PROCESSING
+                await message.reply(answer_message, reply=False, parse_mode = 'HTML', disable_web_page_preview=True)
+                
+                try:
+                    k = 1
+                    file_path = f'tmp/documents/id_{user_id}_{time.strftime("%Y%m%d_%H%M%S")}.csv'
+                    await document.download(destination_file=file_path)
+                    df = pd.DataFrame()
+                    df = pd.read_csv(file_path, header=None, sep=';')
+                    df = df.astype(object).where(pd.notnull(df),None)
+                    if str(df.iloc[0,1]) == 'translation':
+                        k = k + 1
+                        df = df.iloc[1:]
+                        if df.shape[0] == 0:
+                            logging.info(f'Не успешная загрузка ERR_6 | {user_id=}, {time.asctime()}')
+                            answer_message = message_texts.MSG_UPLOAD_CSV_ERR_6
+                            await message.reply(answer_message, reply=False, parse_mode = 'HTML', disable_web_page_preview=True)
+                            return
+                    for i in range(df.shape[0]):
+                        for j in range(df.shape[1]):
+                            value = df.iloc[i, j]
+                            if j in (0, 1) and not value:
+                                answer_message = message_texts.MSG_UPLOAD_CSV_ERR_5.format(row=i+k)
+                                await message.reply(answer_message, reply=False, parse_mode = 'HTML', disable_web_page_preview=True)
+                                return
+                    
+                    # preview preparation
+                    preview = str()
+                    df_head = df.head(5)
+                    for i in range(df_head.shape[0]):
+                        for j in range(df_head.shape[1]):
+                            value = df_head.iloc[i, j]
+                            if not value:
+                                value = ""
+                            else:
+                                value = str(value)
+                            if j >= 2:
+                                preview = preview + value
+                            else:
+                                preview = preview + value + " | "
+                        if i == df_head.shape[0] - 1:
+                            preview = preview
+                        else:
+                            preview = preview + "\n"
+                    answer_message = message_texts.MSG_UPLOAD_CSV_PREVIEW.format(preview=preview)
+                    upload_send_message = await message.reply(answer_message, reply=False, parse_mode = 'HTML', disable_web_page_preview=True, reply_markup = inline_buttons_upload)
+                    upload_send_message
+                    chat_id = message.chat.id
+                    message_id = upload_send_message['message_id']
+                    async with state.proxy() as data:
+                        data['upload_csv'] = {'chat_id': chat_id,
+                                                'message_id': message_id,
+                                                'fp': file_path,
+                                                }
+                    return
+                except:
+                    logging.info(f'Не успешная загрузка ERR_4 | {user_id=}, {time.asctime()}')
+                    answer_message = message_texts.MSG_UPLOAD_CSV_ERR_4
+            else:
+                logging.info(f'Не успешная загрузка ERR_3 | {user_id=}, {time.asctime()}')
+                answer_message = message_texts.MSG_UPLOAD_CSV_ERR_3
+        else:
+            logging.info(f'Не успешная загрузка ERR_2 | {user_id=}, {time.asctime()}')
+            answer_message = message_texts.MSG_UPLOAD_CSV_ERR_2
+    else:
+        logging.info(f'Не успешная загрузка ERR_1 | {user_id=}, {time.asctime()}')
+        answer_message = message_texts.MSG_UPLOAD_CSV_ERR_1
+
+    await message.reply(answer_message, reply=False, parse_mode = 'HTML', disable_web_page_preview=True)
+
+# Ответ на колбэк загружкаем слова?
+@dp.callback_query_handler(filters.Text(contains=['upload_']), state=FSMUpload.upload_csv) 
+@users_access
+async def upload_confirmation(callback_query: types.CallbackQuery, state: FSMContext, *args, **kwargs):
+    user_id = callback_query.from_user.id
+    download_type = callback_query.data
+
+    if download_type == 'upload_yes':
+        answer_message = message_texts.MSG_UPLOAD_CSV_YES
+        async with state.proxy() as data:
+            fp = data['upload_csv']['fp']
+            logging.info(f'Загружаем слова из CSV в БД | {user_id=}, {time.asctime()}')
+            # try:
+            await upload_csv(user_id, fp)
+            logging.info(f'Успешно загрузили слова в БД | {user_id=}, {time.asctime()}')
+            # except:
+            #     answer_message = message_texts.MSG_UPLOAD_CSV_YES_ERR
+            #     logging.info(f'Ошибка в загрузке слов в БД | {user_id=}, {time.asctime()}')
+            await delete_file_on_server(user_id, fp) # удаляем скаченный файл
+        await state.finish()
+    else:
+        answer_message = message_texts.MSG_UPLOAD_CSV_NO
+        async with state.proxy() as data:
+            fp = data['upload_csv']['fp']
+            await delete_file_on_server(user_id, fp) # удаляем скаченный файл
+    await callback_query.message.answer(answer_message, reply=False, parse_mode = 'HTML')
+    await callback_query.message.delete_reply_markup() # удаляем инлайновую клавиатуру
+    await callback_query.answer() # завершаем коллбэк
+
+
+
+# Ответ на колбэк загружкаем слова? - отмена
+@dp.callback_query_handler(filters.Text(contains=['cancel']), state=FSMUpload.upload_csv) 
+@users_access
+async def cancel_upload(callback_query: types.CallbackQuery, state: FSMContext, *args, **kwargs):
+    user_id = callback_query.from_user.id
+    logging.info(f'Отмена | {user_id=}, {time.asctime()}')
+    await callback_query.message.delete_reply_markup() # удаляем инлайновую клавиатуру
+    await callback_query.answer() # завершаем коллбэк
+
+    answer_message = message_texts.MSG_CANCEL_UPLOAD_CSV
+    await callback_query.message.answer(answer_message)
+    async with state.proxy() as data:
+        fp = data['upload_csv']['fp']
+        await delete_file_on_server(user_id, fp) # удаляем скаченный файл
+    await state.finish()
+
+
+# Скачиваем слова из бота в csv
 @dp.message_handler(commands=['download_csv'], state=None)
 @users_access
 async def download(message: types.Message, state: FSMContext, *args, **kwargs):
@@ -573,11 +830,12 @@ async def download(message: types.Message, state: FSMContext, *args, **kwargs):
             doc = open(fp, 'rb')
             await message.answer_document(document=doc)
             doc.close()
-            if os.path.isfile(fp):
-                os.remove(fp)
-                logging.info(f'{fp} deleted. | {user_id=}, {time.asctime()}')
-            else:
-                logging.info(f'{fp} not found. | {user_id=}, {time.asctime()}')
+            await delete_file_on_server(user_id, fp) # удаляем скаченный файл
+            # if os.path.isfile(fp):
+            #     os.remove(fp)
+            #     logging.info(f'{fp} deleted. | {user_id=}, {time.asctime()}')
+            # else:
+            #     logging.info(f'{fp} not found. | {user_id=}, {time.asctime()}')
             await state.finish()
         else:
             logging.info(f'Написан не существующий номер группы | {user_id=}, {time.asctime()}')
@@ -733,7 +991,7 @@ async def print_cards_group(message: types.Message, state: FSMContext, *args, **
                                       'min_group_num': user_groups['min_group_num'],
                                       'max_group_num': user_groups['max_group_num'],
                                       'message': int(),
-                                      'current_state':current_state}
+                                      'current_state': current_state}
 
 # Изменение группы слов для режима карточек - ловим группу и меняем
 @dp.message_handler(state=FSMCard.change_cards_group)

@@ -4,8 +4,9 @@ import os
 import pandas as pd
 import sqlite3 as sq
 
-import message_texts
 from fasttext.FastText import _FastText
+import message_texts
+
 
 # Определяем язык текста
 def define_language(string: str) -> str:
@@ -66,6 +67,12 @@ async def db_start():
                     word TEXT,
                     translation TEXT,
                     category TEXT,
+                    is_uploaded_from_file INTEGER,
+                    num_click_first_button INTEGER,
+                    num_click_second_button INTEGER,
+                    num_click_third_button INTEGER,
+                    num_click_fourth_button INTEGER,
+                    next_reminder_interval INTEGER,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
                     reminder_date TIMESTAMP,
                     FOREIGN KEY (user_id) REFERENCES profile(user_id))"""
@@ -107,6 +114,63 @@ async def db_start():
         cur.execute("INSERT INTO notifications(user_id, notifications_interval, next_notifications_date, created_at, update_date) VALUES(?, ?, ?, ?, ?)", 
                     (user_id, notifications_interval, next_notifications_date, created_at, update_date))
         db.commit()
+
+    # Создание таблицы с файлами бота
+    query = """CREATE TABLE IF NOT EXISTS files(
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    file_id TEXT,
+                    file_name TEXT,
+                    file_description TEXT,
+                    file_path TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+                    update_date TIMESTAMP)"""
+    cur.execute(query)
+    db.commit()
+
+
+# Получаем список файлов из БД
+async def get_files(file_name: str = None) -> list:
+    if not file_name:
+        file_rows = []
+        query = """WITH t1 as (
+                    SELECT file_id,
+                        file_name,
+                        ROW_NUMBER() OVER(PARTITION BY file_name ORDER BY created_at) AS rn
+                    FROM files
+                    )
+                    SELECT file_id, file_name
+                    FROM t1
+                    WHERE rn = 1
+                    ORDER BY file_name;
+                    """
+        file_rows = cur.execute(query).fetchall()
+        return file_rows
+    else:
+        file_rows = []
+        query = """SELECT file_id
+                    FROM files
+                    WHERE file_name = '{file_name}'
+                    ORDER BY created_at
+                    LIMIT 1
+                    """
+        file_rows = cur.execute(query.format(file_name=file_name)).fetchone()
+        return file_rows
+
+
+# Добавление строчки в БД с имеющимся файлом
+async def add_file_row(file_id: str, file_name: str, file_description: str, file_path: str):
+    created_at = datetime.utcnow()
+    update_date = created_at
+    cur.execute("INSERT INTO files(file_id, file_name, file_description, file_path, created_at, update_date) VALUES(?, ?, ?, ?, ?, ?)", 
+                (file_id, file_name, file_description, file_path, created_at, update_date))
+    db.commit()
+
+# Обновление file_id в БД
+async def update_file_row(file_name: str, file_id_new: str):
+    update_date = datetime.utcnow()
+    query = """UPDATE files SET file_id = ?, update_date = ? WHERE file_name == ?"""
+    cur.execute(query, (file_id_new, update_date, file_name))
+    db.commit()
 
 
 # Получаем список пользователей с доступами
@@ -437,6 +501,33 @@ def cards(user_id: str, group: str) -> list:
         rev.append(rev_card)
     users_cards = users_cards + rev
     return users_cards
+
+
+# Загружаем слова в БД из csv
+async def upload_csv(user_id: str, fp: str):
+    reminder_date = datetime.utcnow()
+    is_uploaded_from_file = 1
+    df = pd.DataFrame()
+    df = pd.read_csv(fp, header=None, sep=';')
+    df = df.astype(object).where(pd.notnull(df),None)
+    if str(df.iloc[0,1]) == 'translation':
+        df = df.iloc[1:]
+    query = """INSERT INTO words(user_id
+                                ,word
+                                ,translation
+                                ,category
+                                ,is_uploaded_from_file
+                                ,reminder_date) VALUES(?, ?, ?, ?, ?, ?)"""
+    for i in range(df.shape[0]):
+        word = df.iloc[i, 0]
+        translation = df.iloc[i, 1]
+        category = df.iloc[i, 2]
+        if word: word.strip()
+        if translation: translation.strip()
+        if category: category.strip()
+        cur.execute(query, (user_id, word, translation, category, is_uploaded_from_file, reminder_date))
+    db.commit()
+
 
 
 # Скачать сохраненные слова
