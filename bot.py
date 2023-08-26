@@ -184,8 +184,8 @@ async def setup_bot_commands():
         types.BotCommand("delete", "Режим удаления одного слова"),
         types.BotCommand("delete_all", "Режим удаления всех слов"),
         types.BotCommand("cancel", "Отмена"),
-        types.BotCommand("notifications", "Настроить уведомлений"),
         types.BotCommand("help", "Помощь"),
+        types.BotCommand("notifications", "Настроить уведомления"),
         types.BotCommand("donate", "Поддержать проект")
     ]
     await bot.set_my_commands(bot_commands)
@@ -265,12 +265,12 @@ async def access_request(message: types.Message, *args, **kwargs):
         if is_auth_access == 0:
             logging.info(f'АВТОМАТИЧЕСКИ ОТКРЫТ ДОСТУП ДЛЯ {user_id} ! | {user_id=}, {username=}, {user_full_name=} {time.asctime()}')
             await add_access([user_id], 1)
-            await message.reply('Доступ открыт! Чтобы начать — /start', reply=False)
+            await message.reply('🔑 Доступ открыт! Чтобы начать — /start', reply=False)
             await bot.send_message('91523724', f"АВТОМАТИЧЕСКИ ОТКРЫТ ДОСТУПА ДЛЯ:\n{user_id} | @{username} | {user_full_name}\n\nЧтобы заблокировать — /block {user_id}")
         else:
             # По согласованию с автором
             logging.info(f'ЗАПРОС ДОСТУПА ДЛЯ {user_id} ! | {user_id=}, {username=}, {user_full_name=} {time.asctime()}')
-            await message.reply('Запрос отправлен. Ожидайте уведомления...', reply=False)
+            await message.reply('🛎 Запрос отправлен. Ожидайте уведомления...', reply=False)
             await bot.send_message('91523724', f"ЗАПРОС ДОСТУПА ДЛЯ:\n{user_id} | @{username} | {user_full_name}\n\nЧтобы открыть доступ — /access {user_id}\nЧтобы заблокировать — /block {user_id}") 
     users_w_access = await get_users_w_access()
 
@@ -287,7 +287,7 @@ async def granting_access(message: types.Message, *args, **kwargs):
     await add_access(access_for_user_id, 1)
     for user_id in access_for_user_id:
         if user_id.isnumeric():
-            await bot.send_message(user_id, "Доступ открыт! Чтобы начать - /start")
+            await bot.send_message(user_id, "🔑 Доступ открыт! Чтобы начать - /start")
             await message.reply(f'Доступ для пользователя {user_id} открыт.', reply=False)
     users_w_access = await get_users_w_access()
 
@@ -1236,19 +1236,19 @@ async def echo(message: types.Message, *args, **kwargs):
 
 # расписание
 async def sched():
-    # try:
-    answer_message = message_texts.MSG_NOTIFICATIONS
-    user_list = await user_list_to_send_notifications()
-    # user_list = [{'user_id': '91523724', 'notifications_interval': str(1)}] # заглушка для уведомлений только себе
-    for user in user_list:
-        if user['user_id'].isnumeric():
-            try:
-                await bot.send_message(user['user_id'], answer_message)
-                await update_notification_interval(user['user_id'], user['notifications_interval'])
-            except:
-                pass
-    # except: 
-    #     await bot.send_message('91523724', "Автор, ошибка в уведомлениях, почини!")
+    try:
+        answer_message = message_texts.MSG_NOTIFICATIONS
+        user_list = await user_list_to_send_notifications()
+        # user_list = [{'user_id': '91523724', 'notifications_interval': str(1)}] # заглушка для уведомлений только себе
+        for user in user_list:
+            if user['user_id'].isnumeric():
+                try:
+                    await bot.send_message(user['user_id'], answer_message)
+                    await update_notification_interval(user['user_id'], user['notifications_interval'])
+                except:
+                    pass
+    except: 
+        await bot.send_message('91523724', "Автор, ошибка в уведомлениях, почини!")
 
 
 scheduler = AsyncIOScheduler(timezone=utc)
