@@ -56,6 +56,7 @@ async def db_start():
                     id INTEGER PRIMARY KEY AUTOINCREMENT, 
                     user_id TEXT, 
                     full_name TEXT,
+                    last_activity TIMESTAMP,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL)"""
     cur.execute(query)
     db.commit()
@@ -64,6 +65,7 @@ async def db_start():
     query = """CREATE TABLE IF NOT EXISTS words(
                     word_id INTEGER PRIMARY KEY AUTOINCREMENT,
                     user_id TEXT,
+                    user_added_word TEXT,
                     word TEXT,
                     translation TEXT,
                     category TEXT,
@@ -260,11 +262,12 @@ async def create_profile(user_id: str, full_name: str):
 
 # Добавление базовых слов
 async def add_basic_words(user_id: str):
+    user_added_word = user_id
     basic_words = message_texts.MSG_ONBOARDING_BASIC_WORDS
     for row in basic_words.split('\n'):
         words = [word.strip() for word in row.split('=', 2)]
         reminder_date = (datetime.utcnow() + timedelta(days=0))
-        cur.execute("INSERT INTO words(user_id, word, translation, category, reminder_date) VALUES(?, ?, ?, ?, ?)", (user_id, words[0], words[1], words[2], reminder_date))
+        cur.execute("INSERT INTO words(user_id, user_added_word, word, translation, category, reminder_date) VALUES(?, ?, ?, ?, ?, ?)", (user_id, user_added_word, words[0], words[1], words[2], reminder_date))
         db.commit()
 
 # Удаление базовых слов
@@ -284,10 +287,11 @@ async def insert_words(user_id: str, user_message: str):
     elif define_language(words[0]) != '__label__en' and define_language(words[1]) == '__label__en':
         words = [words[1], words[0], words[2]]
     reminder_date = (datetime.utcnow() + timedelta(days=0))
+    user_added_word = user_id
     if not words[2]:
-        cur.execute("INSERT INTO words(user_id, word, translation, reminder_date) VALUES(?, ?, ?, ?)", (user_id, words[0], words[1], reminder_date))
+        cur.execute("INSERT INTO words(user_id, user_added_word, word, translation, reminder_date) VALUES(?, ?, ?, ?, ?)", (user_id, user_added_word, words[0], words[1], reminder_date))
     else:
-        cur.execute("INSERT INTO words(user_id, word, translation, category, reminder_date) VALUES(?, ?, ?, ?, ?)", (user_id, words[0], words[1], words[2], reminder_date))
+        cur.execute("INSERT INTO words(user_id, user_added_word, word, translation, category, reminder_date) VALUES(?, ?, ?, ?, ?, ?)", (user_id, user_added_word, words[0], words[1], words[2], reminder_date))
     db.commit()
 
 
@@ -506,6 +510,7 @@ def cards(user_id: str, group: str) -> list:
 # Загружаем слова в БД из csv
 async def upload_csv(user_id: str, fp: str):
     reminder_date = datetime.utcnow()
+    user_added_word = user_id
     is_uploaded_from_file = 1
     df = pd.DataFrame()
     df = pd.read_csv(fp, header=None, sep=';')
@@ -513,11 +518,12 @@ async def upload_csv(user_id: str, fp: str):
     if str(df.iloc[0,1]) == 'translation':
         df = df.iloc[1:]
     query = """INSERT INTO words(user_id
+                                ,user_added_word
                                 ,word
                                 ,translation
                                 ,category
                                 ,is_uploaded_from_file
-                                ,reminder_date) VALUES(?, ?, ?, ?, ?, ?)"""
+                                ,reminder_date) VALUES(?, ?, ?, ?, ?, ?, ?)"""
     for i in range(df.shape[0]):
         word = df.iloc[i, 0]
         translation = df.iloc[i, 1]
@@ -525,7 +531,7 @@ async def upload_csv(user_id: str, fp: str):
         if word: word.strip()
         if translation: translation.strip()
         if category: category.strip()
-        cur.execute(query, (user_id, word, translation, category, is_uploaded_from_file, reminder_date))
+        cur.execute(query, (user_id, user_added_word, word, translation, category, is_uploaded_from_file, reminder_date))
     db.commit()
 
 
