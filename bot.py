@@ -17,7 +17,7 @@ from sqlite import db_start, get_files, add_file_row, update_file_row, get_auth_
     create_profile, words_exists, update_last_activity, add_basic_words, del_basic_words, insert_words, select_words, delete_word,\
     delete_all_words, actual_user_group, all_user_groups, change_cards_group, cards,\
     update_remind_date, words_num, select_duplicate, upload_csv, download_csv, update_group, actual_user_notification_interval,\
-    update_notification_interval, user_list_to_send_notifications, user_list_to_send_message, any_query
+    update_notification_interval, user_list_to_send_notifications, user_list_to_send_message, event_recording, any_query
 
 # All timestamp in UTC: -3 hour from msk
 
@@ -266,15 +266,20 @@ async def access_request(message: types.Message, *args, **kwargs):
         is_auth_access = await get_auth_access()
         # Автоматический
         if is_auth_access == 0:
-            logging.info(f'АВТОМАТИЧЕСКИ ОТКРЫТ ДОСТУП ДЛЯ {user_id} ! | {user_id=}, {username=}, {user_full_name=} {time.asctime()}')
             await add_access([user_id], 1)
             await message.reply('🔑 Доступ открыт! Чтобы начать — /start', reply=False)
             await bot.send_message('91523724', f"АВТОМАТИЧЕСКИ ОТКРЫТ ДОСТУПА ДЛЯ:\n{user_id} | @{username} | {user_full_name}\n\nЧтобы заблокировать — /block {user_id}")
+            # events
+            logging.info(f'АВТОМАТИЧЕСКИ ОТКРЫТ ДОСТУП ДЛЯ {user_id} ! | {user_id=}, {username=}, {user_full_name=} {time.asctime()}')
+            await event_recording(user_id=user_id, event='access_request')
+            await event_recording(user_id=user_id, event='granting_access')
         else:
             # По согласованию с автором
-            logging.info(f'ЗАПРОС ДОСТУПА ДЛЯ {user_id} ! | {user_id=}, {username=}, {user_full_name=} {time.asctime()}')
             await message.reply('🛎 Запрос отправлен. Ожидайте уведомления...', reply=False)
             await bot.send_message('91523724', f"ЗАПРОС ДОСТУПА ДЛЯ:\n{user_id} | @{username} | {user_full_name}\n\nЧтобы открыть доступ — /access {user_id}\nЧтобы заблокировать — /block {user_id}") 
+            # events
+            logging.info(f'ЗАПРОС ДОСТУПА ДЛЯ {user_id} ! | {user_id=}, {username=}, {user_full_name=} {time.asctime()}')
+            await event_recording(user_id=user_id, event='granting_access')
     users_w_access = await get_users_w_access()
 
 # Выдача доступа
@@ -285,7 +290,6 @@ async def granting_access(message: types.Message, *args, **kwargs):
     user_id = message.from_user.id
     access_for_user_id = message.text.split(" ")
     del access_for_user_id[0]
-    logging.info(f'Доступ открыт для пользователя {access_for_user_id}| {user_id=} {time.asctime()}')
 
     await add_access(access_for_user_id, 1)
     for user_id in access_for_user_id:
@@ -293,6 +297,9 @@ async def granting_access(message: types.Message, *args, **kwargs):
             await bot.send_message(user_id, "🔑 Доступ открыт! Чтобы начать - /start")
             await message.reply(f'Доступ для пользователя {user_id} открыт.', reply=False)
     users_w_access = await get_users_w_access()
+    # events
+    logging.info(f'Доступ открыт для пользователя {access_for_user_id}| {user_id=} {time.asctime()}')
+    await event_recording(user_id=user_id, event='granting_access')
 
 
 # Блокировка доступа
@@ -303,13 +310,15 @@ async def block_access(message: types.Message, *args, **kwargs):
     user_id = message.from_user.id
     access_for_user_id = message.text.split(" ")
     del access_for_user_id[0]
-    logging.info(f'Доступ заблокирован для пользователя {access_for_user_id}| {user_id=} {time.asctime()}')
 
     await add_access(access_for_user_id, 0)
     for user_id in access_for_user_id:
         if user_id.isnumeric():
             await message.reply(f'Доступ для пользователя {user_id} закрыт.', reply=False)
     users_w_access = await get_users_w_access()
+    # events
+    logging.info(f'Доступ заблокирован для пользователя {access_for_user_id}| {user_id=} {time.asctime()}')
+    await event_recording(user_id=user_id, event='access_blocking')    
 
 
 # Старт
@@ -320,12 +329,13 @@ async def start_hendler(message: types.Message, *args, **kwargs):
     user_name = message.from_user.first_name
     user_full_name = message.from_user.full_name
 
-    logging.info(f'Старт | {user_id=}, {user_full_name=} {time.asctime()}')
-
     await create_profile(user_id, user_full_name)
     await message.reply(f'Привет, {user_name}!', reply=False)
     await bot.send_message(user_id, message_texts.MSG_START, parse_mode = 'HTML')
     await bot.send_message(user_id, message_texts.MSG_ONBOARDING_START, parse_mode = 'HTML')
+    # events
+    logging.info(f'Старт | {user_id=}, {user_full_name=} {time.asctime()}')
+    await event_recording(user_id=user_id, event='start') 
 
 
 # Хэлп
@@ -333,9 +343,10 @@ async def start_hendler(message: types.Message, *args, **kwargs):
 @users_access
 async def help_hendler(message: types.Message, *args, **kwargs):
     user_id = message.from_user.id
-    logging.info(f'Хэлп | {user_id=} {time.asctime()}')
-
     await bot.send_message(user_id, message_texts.MSG_HELP, parse_mode = 'HTML')
+    # events
+    logging.info(f'Хэлп | {user_id=} {time.asctime()}')
+    await event_recording(user_id=user_id, event='help')
 
 
 # Вывести все команжы
@@ -343,22 +354,23 @@ async def help_hendler(message: types.Message, *args, **kwargs):
 @users_access
 async def all_commands(message: types.Message, *args, **kwargs):
     user_id = message.from_user.id
-    logging.info(f'Вывести все команды | {user_id=} {time.asctime()}')
-
     await bot.send_message(user_id, message_texts.MSG_COMANDS, parse_mode = 'HTML')
+    # events
+    logging.info(f'Вывести все команды | {user_id=} {time.asctime()}')
+    await event_recording(user_id=user_id, event='sending_commands')
 
 
-# Онбординг - инстркция
+# Онбординг - инструкция
 @dp.message_handler(commands=['onboarding'])
 @users_access
 async def onboarding_info(message: types.Message, *args, **kwargs):
     user_id = message.from_user.id
-    logging.info(f'Онбординг - инстркция | {user_id=} {time.asctime()}')
-
     await bot.send_message(user_id, message_texts.MSG_ONBOARDING, parse_mode = 'HTML')
-
     # отправка видео инструкции
     # await message.answer_video(user_id, )
+    # events
+    logging.info(f'Онбординг - инстркция | {user_id=} {time.asctime()}')
+    await event_recording(user_id=user_id, event='onboarding')
 
 # Онбординг - добавление базовых слов
 @dp.message_handler(commands=['add_basic_words'])
@@ -366,21 +378,23 @@ async def onboarding_info(message: types.Message, *args, **kwargs):
 async def onboarding_add_basic_words(message: types.Message, *args, **kwargs):
     user_id = message.from_user.id
     user_full_name = message.from_user.full_name
-    logging.info(f'Онбординг - добавление базовых слов | {user_id=} {time.asctime()}')
-
     await create_profile(user_id, user_full_name)
     await add_basic_words(user_id)
     await bot.send_message(user_id, message_texts.MSG_ONBOARDING_ADD_BASIC_WORDS, parse_mode = 'HTML')
+    # events
+    logging.info(f'Онбординг - добавление базовых слов | {user_id=} {time.asctime()}')
+    await event_recording(user_id=user_id, event='add_basic_words')
 
 # Онбординг - удаление базовых слов
 @dp.message_handler(commands=['del_basic_words'])
 @users_access
 async def onboarding_del_basic_words(message: types.Message, *args, **kwargs):
     user_id = message.from_user.id
-    logging.info(f'Онбординг - удаление базовых слов | {user_id=} {time.asctime()}')
-
     await del_basic_words(user_id)
     await bot.send_message(user_id, message_texts.MSG_ONBOARDING_DEL_BASIC_WORDS, parse_mode = 'HTML')
+    # events
+    logging.info(f'Онбординг - удаление базовых слов | {user_id=} {time.asctime()}')
+    await event_recording(user_id=user_id, event='del_basic_words')
 
 
 # Просмотр команд для автора
@@ -388,9 +402,9 @@ async def onboarding_del_basic_words(message: types.Message, *args, **kwargs):
 @auth
 async def help_auth_hendler(message: types.Message, *args, **kwargs):
     user_id = message.from_user.id
-    logging.info(f'Хэлп для автора | {user_id=} {time.asctime()}')
-
     await bot.send_message(user_id, message_texts.MSG_AUTH_HELP, parse_mode = 'HTML')
+    # events
+    logging.info(f'Хэлп для автора | {user_id=} {time.asctime()}')
 
 
 # Выход из состояний
@@ -398,8 +412,6 @@ async def help_auth_hendler(message: types.Message, *args, **kwargs):
 @users_access
 async def cancel_handler(message: types.Message, state: FSMContext, *args, **kwargs):
     user_id = message.from_user.id
-    logging.info(f'Отмена | {user_id=} {time.asctime()}')
-
     current_state = await state.get_state()
     if current_state is None:
         await message.reply(message_texts.MSG_CANCEL, reply=False)
@@ -435,6 +447,9 @@ async def cancel_handler(message: types.Message, state: FSMContext, *args, **kwa
         answer_message = message_texts.MSG_CANCEL_GENETAL
     await state.finish()
     await message.reply(answer_message, reply=False)
+    # events
+    logging.info(f'Отмена | {user_id=} {time.asctime()}')
+    await event_recording(user_id=user_id, event='cancel')
 
 
 # Обновление следующей даты уведомления
@@ -458,15 +473,11 @@ async def word_insert(message: types.Message, state: FSMContext, *args, **kwargs
     user_id = message.from_user.id
     user_full_name = message.from_user.full_name
     user_message = message.text
-    logging.info(f'Добавление слова | {user_id=}, {user_full_name=}, {user_message} {time.asctime()}')
     
     answer_message = message_texts.MSG_INSERT_WORD
     await create_profile(user_id, user_full_name)
     await insert_words(user_id, user_message)
     await message.reply(answer_message)
-
-    # Обновляем след. дату уведомления
-    await update_next_notification(user_id)
 
     # выход из всех режимов, если они были включены
     current_state = await state.get_state()
@@ -507,6 +518,11 @@ async def word_insert(message: types.Message, state: FSMContext, *args, **kwargs
             answer_message = message_texts.MSG_CANCEL_GENETAL
         await state.finish()
         await message.reply(answer_message, reply=False)
+    # Обновляем след. дату уведомления
+    await update_next_notification(user_id)
+    # events
+    logging.info(f'Добавление слова | {user_id=}, {user_full_name=}, {user_message} {time.asctime()}')
+    await event_recording(user_id=user_id, event='adding_word')
 
 
 # Удаление слова
@@ -514,26 +530,30 @@ async def word_insert(message: types.Message, state: FSMContext, *args, **kwargs
 @users_access
 async def word_delete(message: types.Message, *args, **kwargs):
     user_id = message.from_user.id
-    logging.info(f'Удаление слова | {user_id=}, {time.asctime()}')
     if not words_exists(user_id):
         answer_message = message_texts.MSG_NO_WORDS
     else:
         await FSMDelete.word_for_delete.set()
         answer_message = message_texts.MSG_DELETE
     await message.reply(answer_message, reply=False)
+    # events
+    logging.info(f'Удаление слова | {user_id=}, {time.asctime()}')
+    await event_recording(user_id=user_id, event='asking_delete_word')
 
 # Ловим слово для удаления
 @dp.message_handler(state=FSMDelete.word_for_delete)
 @users_access
 async def load_word_for_delete(message: types.Message, state: FSMContext, *args, **kwargs):
     user_id = message.from_user.id
-    logging.info(f'Ловим слово для удаления | {user_id=}, {time.asctime()}')
     async with state.proxy() as data:
         data['word_for_delete'] = message.text
         
     answer_message = await delete_word(user_id, state)
     await state.finish()
     await message.reply(answer_message)
+    # events
+    logging.info(f'Ловим слово для удаления | {user_id=}, {time.asctime()}')
+    await event_recording(user_id=user_id, event='deleting_word')
 
 
 # Удаление всех слов
@@ -541,32 +561,36 @@ async def load_word_for_delete(message: types.Message, state: FSMContext, *args,
 @users_access
 async def delete_all(message: types.Message, *args, **kwargs):
     user_id = message.from_user.id
-    logging.info(f'Удаление всех слов | {user_id=}, {time.asctime()}')
     if not words_exists(user_id):
         answer_message = message_texts.MSG_NO_WORDS
     else:
         await FSMDeleteAll.delete_all.set()
         answer_message = message_texts.MSG_DELETE_ALL
     await message.reply(answer_message, reply=False)
+    # events
+    logging.info(f'Удаление всех слов | {user_id=}, {time.asctime()}')
 
 # Ловим запуск процесса удаления всех слов
 @dp.message_handler(commands=['delete_all'], state=FSMDeleteAll.delete_all)
 @users_access
 async def delete_all_again(message: types.Message, *args, **kwargs):
     user_id = message.from_user.id
-    logging.info(f'Запущен процесс удаления всех слов | {user_id=}, {time.asctime()}')
     answer_message = message_texts.MSG_DELETE_ALL_X2
     await message.reply(answer_message)
+    # events
+    logging.info(f'Запущен процесс удаления всех слов | {user_id=}, {time.asctime()}')
 
 # Ловим подтверждение, что нужно удалить все слова
 @dp.message_handler(commands=['yes'], state=FSMDeleteAll.delete_all)
 @users_access
 async def delete_all_again(message: types.Message, state: FSMContext, *args, **kwargs):
     user_id = message.from_user.id
-    logging.info(f'Все слова удалены | {user_id=}, {time.asctime()}')
     answer_message = await delete_all_words(user_id)
     await state.finish()
     await message.reply(answer_message, reply=False)
+    # events
+    logging.info(f'Все слова удалены | {user_id=}, {time.asctime()}')
+    await event_recording(user_id=user_id, event='deleting_all_words')
 
 
 # Выводим список слов
@@ -575,10 +599,10 @@ async def delete_all_again(message: types.Message, state: FSMContext, *args, **k
 async def print_my_words(message: types.Message, *args, **kwargs):
     user_id = message.from_user.id
     answer_message = await select_words(user_id)
-
-    logging.info(f'Выводим список сохраненных слов | {user_id=}, {time.asctime()}')
-    
     await message.reply(answer_message, reply=False)
+    # events
+    logging.info(f'Выводим список сохраненных слов | {user_id=}, {time.asctime()}')
+    await event_recording(user_id=user_id, event='sending_last_words')
 
 
 # Выводим кол-во слов всего
@@ -587,8 +611,10 @@ async def print_my_words(message: types.Message, *args, **kwargs):
 async def print_my_words_num(message: types.Message, *args, **kwargs):
     user_id = message.from_user.id
     answer_message = await words_num(user_id)
-    logging.info(f'Выводим кол-во сохраненных слов | {user_id=}, {time.asctime()}')
     await message.reply(answer_message, reply=False, parse_mode = 'HTML')
+    # events
+    logging.info(f'Выводим кол-во сохраненных слов | {user_id=}, {time.asctime()}')
+    await event_recording(user_id=user_id, event='sending_word_count')
 
 
 # Импорт экспорт
@@ -596,9 +622,11 @@ async def print_my_words_num(message: types.Message, *args, **kwargs):
 @users_access
 async def import_export(message: types.Message, *args, **kwargs):
     user_id = message.from_user.id
-    logging.info(f'Импорт экспорт | {user_id=}, {time.asctime()}')
     answer_message = message_texts.MSG_IMPORT_EXPORT
     await message.reply(answer_message, reply=False, parse_mode = 'HTML')
+    # events
+    logging.info(f'Импорт экспорт | {user_id=}, {time.asctime()}')
+    await event_recording(user_id=user_id, event='import_export')
 
 
 # Загрузка слов пользователя в бота через csv
@@ -713,12 +741,12 @@ async def upload_confirmation(callback_query: types.CallbackQuery, state: FSMCon
         async with state.proxy() as data:
             fp = data['upload_csv']['fp']
             logging.info(f'Загружаем слова из CSV в БД | {user_id=}, {time.asctime()}')
-            # try:
-            await upload_csv(user_id, fp)
-            logging.info(f'Успешно загрузили слова в БД | {user_id=}, {time.asctime()}')
-            # except:
-            #     answer_message = message_texts.MSG_UPLOAD_CSV_YES_ERR
-            #     logging.info(f'Ошибка в загрузке слов в БД | {user_id=}, {time.asctime()}')
+            try:
+                await upload_csv(user_id, fp)
+                logging.info(f'Успешно загрузили слова в БД | {user_id=}, {time.asctime()}')
+            except:
+                answer_message = message_texts.MSG_UPLOAD_CSV_YES_ERR
+                logging.info(f'Ошибка в загрузке слов в БД | {user_id=}, {time.asctime()}')
             await delete_file_on_server(user_id, fp) # удаляем скаченный файл
         await state.finish()
     else:
@@ -729,7 +757,6 @@ async def upload_confirmation(callback_query: types.CallbackQuery, state: FSMCon
     await callback_query.message.answer(answer_message, reply=False, parse_mode = 'HTML')
     await callback_query.message.delete_reply_markup() # удаляем инлайновую клавиатуру
     await callback_query.answer() # завершаем коллбэк
-
 
 
 # Ответ на колбэк загружкаем слова? - отмена
@@ -754,7 +781,6 @@ async def cancel_upload(callback_query: types.CallbackQuery, state: FSMContext, 
 @users_access
 async def download(message: types.Message, state: FSMContext, *args, **kwargs):
     user_id = message.from_user.id
-    logging.info(f'Пользователь выбирает способ скачивания csv | {user_id=}, {time.asctime()}')
     if not words_exists(user_id):
         answer_message = message_texts.MSG_NO_WORDS
         await message.reply(answer_message, reply=False)
@@ -768,6 +794,9 @@ async def download(message: types.Message, state: FSMContext, *args, **kwargs):
         async with state.proxy() as data:
             data['download_csv'] = {'chat_id': chat_id,
                                         'message_id': message_id}
+    # events
+    logging.info(f'Пользователь выбирает способ скачивания csv | {user_id=}, {time.asctime()}')
+    await event_recording(user_id=user_id, event='asking_download_csv')
 
 
 # Ответ на колбэк скачивания - что скачиваем?
@@ -778,7 +807,10 @@ async def download(callback_query: types.CallbackQuery, state: FSMContext, *args
     download_type = callback_query.data
 
     if download_type == 'download_all':
+        # events
         logging.info(f'Скачиваем файл для пользователя в csv | {user_id=}, {time.asctime()}')
+        await event_recording(user_id=user_id, event='sending_downloaded_csv')
+        
         group = message_texts.MSG_ALL_WORDS
         answer_message = message_texts.MSG_DOWNLOAD_CSV_ALL
         await callback_query.message.answer(answer_message, reply=False, parse_mode = 'HTML')
@@ -823,7 +855,10 @@ async def download(message: types.Message, state: FSMContext, *args, **kwargs):
             min_group_num = data['download_csv_group_selection']['min_group_num']
             max_group_num = data['download_csv_group_selection']['max_group_num'] + 1
         if user_message in range(min_group_num, max_group_num):
+            # events
             logging.info(f'Скачиваем файл по группе в csv | {user_id=}, {time.asctime()}')
+            await event_recording(user_id=user_id, event='sending_downloaded_csv')
+
             group_num = user_message
             group = data['download_csv_group_selection']['groups'][group_num]
             answer_message = message_texts.MSG_DOWNLOAD_CSV_GROUP.format(group=group)
@@ -834,11 +869,6 @@ async def download(message: types.Message, state: FSMContext, *args, **kwargs):
             await message.answer_document(document=doc)
             doc.close()
             await delete_file_on_server(user_id, fp) # удаляем скаченный файл
-            # if os.path.isfile(fp):
-            #     os.remove(fp)
-            #     logging.info(f'{fp} deleted. | {user_id=}, {time.asctime()}')
-            # else:
-            #     logging.info(f'{fp} not found. | {user_id=}, {time.asctime()}')
             await state.finish()
         else:
             logging.info(f'Написан не существующий номер группы | {user_id=}, {time.asctime()}')
@@ -867,10 +897,12 @@ async def cancel_download(callback_query: types.CallbackQuery, state: FSMContext
 @dp.message_handler(commands=['cards'], state=None)
 @users_access
 async def load_cards(message: types.Message, state: FSMContext, *args, **kwargs):
-
     user_id = message.from_user.id
-    chat_id = message.chat.id
+    # events
     logging.info(f'Запущены карточки | {user_id=}, {time.asctime()}')
+    await event_recording(user_id=user_id, event='launching_cards')
+
+    chat_id = message.chat.id
     index_num = 0
     group = await actual_user_group(user_id)
     users_cards = cards(user_id, group)
@@ -892,6 +924,9 @@ async def load_cards(message: types.Message, state: FSMContext, *args, **kwargs)
                                          'index_num': index_num, 
                                          'chat_id': chat_id, 
                                          'cards_send_message': cards_send_message}
+        # events
+        logging.info(f'Показ слова в карточках | {user_id=}, {time.asctime()}')
+        await event_recording(user_id=user_id, word_id=users_cards[index_num][0], event='sending_word')
     
     # Обновляем след. дату уведомления
     await update_next_notification(user_id)
@@ -907,12 +942,14 @@ async def translation(callback_query: types.CallbackQuery, state: FSMContext, *a
         chat_id = data['word_for_reminder']['chat_id']
         cards_send_message = data['word_for_reminder']['cards_send_message']
         user_id = callback_query.from_user.id
-        logging.info(f'Показан перевод карточки | {user_id=}, {time.asctime()}')
         await callback_query.message.delete_reply_markup() # удаляем инлайновую клавиатуру
         cards_edited_message_id = cards_send_message['message_id']
         cards_edited_message_text = cards_send_message['text'] + " | " + users_cards[index_num][2]
         await bot.edit_message_text(text=cards_edited_message_text, chat_id=chat_id, message_id=cards_edited_message_id, reply_markup=inline_buttons_reminder)
         await callback_query.answer(users_cards[index_num][1]) # завершаем коллбэк
+        # events
+        logging.info(f'Показан перевод карточки | {user_id=}, {time.asctime()}')
+        await event_recording(user_id=user_id, word_id=users_cards[index_num][0], event='showing_translation')
 
 # Ответ на колбэк следующее слово
 @dp.callback_query_handler(filters.Text(contains=['remind in']), state=FSMCard.word_for_reminder) 
@@ -927,10 +964,12 @@ async def next_cards(callback_query: types.CallbackQuery, state: FSMContext, *ar
 
         user_id = callback_query.from_user.id
         remind_in = callback_query.data
-        logging.info(f'Обновлена дата карточки | {user_id=}, {time.asctime()}')
         await update_remind_date(user_id, word_id = users_cards[index_num][0], remind_in = remind_in, rev = users_cards[index_num][3])
         await callback_query.message.delete_reply_markup() # удаляем инлайновую клавиатуру
         await callback_query.answer(users_cards[index_num][1]) # завершаем коллбэк
+        # events
+        logging.info(f'Обновлена дата карточки | {user_id=}, {time.asctime()}')
+        await event_recording(user_id=user_id, word_id=users_cards[index_num][0], event='selecting_reminder_interval')
 
         index_num += 1
         if index_num > total_num - 1:
@@ -953,7 +992,6 @@ async def next_cards(callback_query: types.CallbackQuery, state: FSMContext, *ar
 @users_access
 async def cancel_cards(callback_query: types.CallbackQuery, state: FSMContext, *args, **kwargs):
     user_id = callback_query.from_user.id
-    logging.info(f'Отмена | {user_id=}, {time.asctime()}')
     await callback_query.message.delete_reply_markup() # удаляем инлайновую клавиатуру
     await callback_query.answer() # завершаем коллбэк
 
@@ -963,6 +1001,10 @@ async def cancel_cards(callback_query: types.CallbackQuery, state: FSMContext, *
     # DONATE
     answer_message_donate = message_texts.MSG_DONATE
     await callback_query.message.answer(answer_message_donate)
+    # events
+    logging.info(f'Отмена | {user_id=}, {time.asctime()}')
+    await event_recording(user_id=user_id, event='cancel - cards')
+
 
 
 # Изменение группы слов для режима карточек - показываем все группы
@@ -970,7 +1012,6 @@ async def cancel_cards(callback_query: types.CallbackQuery, state: FSMContext, *
 @users_access
 async def print_cards_group(message: types.Message, state: FSMContext, *args, **kwargs):
     user_id = message.from_user.id
-    logging.info(f'Показываем все группы слов для режима карточек | {user_id=}, {time.asctime()}')
 
     # выход из режима карточек, если он был включены
     current_state = await state.get_state()
@@ -995,6 +1036,9 @@ async def print_cards_group(message: types.Message, state: FSMContext, *args, **
                                       'max_group_num': user_groups['max_group_num'],
                                       'message': int(),
                                       'current_state': current_state}
+    # events
+    logging.info(f'Показываем все группы слов для режима карточек | {user_id=}, {time.asctime()}')
+    await event_recording(user_id=user_id, event='sending_group_of_words')
 
 # Изменение группы слов для режима карточек - ловим группу и меняем
 @dp.message_handler(state=FSMCard.change_cards_group)
@@ -1033,8 +1077,10 @@ async def get_cards_group(message: types.Message, state: FSMContext, *args, **kw
 async def duplicates(message: types.Message, *args, **kwargs):
     user_id = message.from_user.id
     answer_message = await select_duplicate(user_id)
-    logging.info(f'Вывод дублирующихся слов | {user_id=}, {time.asctime()}')
     await message.reply(answer_message, reply=False, parse_mode = 'HTML')
+    # events
+    logging.info(f'Вывод дублирующихся слов | {user_id=}, {time.asctime()}')
+    await event_recording(user_id=user_id, event='sending_duplicates')
 
 
 # Изменение группы у слова
@@ -1073,7 +1119,6 @@ async def cancel_change_grpup(callback_query: types.CallbackQuery, state: FSMCon
 @users_access
 async def notifications(message: types.Message, *args, **kwargs):
     user_id = message.from_user.id
-    logging.info(f'Настройка частоты уведомлений | {user_id=} {time.asctime()}')
     await FSMNotif.notifications.set()
     notification_interval = await actual_user_notification_interval(user_id)
     if notification_interval.isnumeric():
@@ -1089,6 +1134,9 @@ async def notifications(message: types.Message, *args, **kwargs):
         add_info = ""
     answer_message = message_texts.MSG_NOTIFICATIONS_INFO.format(notification_freq=notification_freq, add_info=add_info)
     await message.reply(answer_message, reply=False, parse_mode = 'HTML', reply_markup=inline_buttons_notifications)
+    # events
+    logging.info(f'Настройка частоты уведомлений | {user_id=} {time.asctime()}')
+    await event_recording(user_id=user_id, event='asking_notifications')
 
 # Ответ на колбэк настройка уведомлений - установка новой частоты
 @dp.callback_query_handler(filters.Text(contains=['notifications_set']), state=FSMNotif.notifications) 
@@ -1096,7 +1144,6 @@ async def notifications(message: types.Message, *args, **kwargs):
 async def cancel_set_notifications(callback_query: types.CallbackQuery, state: FSMContext, *args, **kwargs):
     user_id = callback_query.from_user.id
     new_notification_interval = str(callback_query.data.split(' ', 1)[1])
-    logging.info(f'Устанавливаем новую частоту уведомлений | {user_id=}, {time.asctime()}')
     await callback_query.message.delete_reply_markup() # удаляем инлайновую клавиатуру
     await callback_query.answer() # завершаем коллбэк
     await update_notification_interval(user_id, new_notification_interval) # Изменяем частоту в БД
@@ -1114,9 +1161,11 @@ async def cancel_set_notifications(callback_query: types.CallbackQuery, state: F
         notification_freq = message_texts.KB_NOTIFICATIONS_NEVER
         add_info = ""
         answer_message = message_texts.MSG_NOTIFICATIONS_SET_NEVER.format(notification_freq=notification_freq, add_info=add_info)
-        
     await state.finish()
     await callback_query.message.answer(answer_message, parse_mode = 'HTML')
+    # events
+    logging.info(f'Устанавливаем новую частоту уведомлений | {user_id=}, {time.asctime()}')
+    await event_recording(user_id=user_id, event='setting_up_notifications')
 
 
 # Ответ на колбэк настройка уведомлений - отмена
@@ -1189,8 +1238,10 @@ async def execute_query(message: types.Message, state: FSMContext, *args, **kwar
 @users_access
 async def donate_hendler(message: types.Message, *args, **kwargs):
     user_id = message.from_user.id
-    logging.info(f'Донат | {user_id=} {time.asctime()}')
     await bot.send_message(user_id, message_texts.MSG_DONATE_INFO)
+    # events
+    logging.info(f'Донат | {user_id=} {time.asctime()}')
+    await event_recording(user_id=user_id, event='donate')
 
 # Донат Georgian_iban
 @dp.message_handler(commands=['Georgian_iban'])

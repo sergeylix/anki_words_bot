@@ -130,6 +130,17 @@ async def db_start():
     cur.execute(query)
     db.commit()
 
+    # Создание таблицы событий
+    query = """CREATE TABLE IF NOT EXISTS events(
+                    id INTEGER PRIMARY KEY AUTOINCREMENT, 
+                    user_id TEXT,
+                    word_id TEXT,
+                    event TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+                    FOREIGN KEY (user_id) REFERENCES profile(user_id))"""
+    cur.execute(query)
+    db.commit()
+
 
 # Получаем список файлов из БД
 async def get_files(file_name: str = None) -> list:
@@ -714,6 +725,20 @@ async def user_list_to_send_message() -> list:
     for user in cur.execute(query).fetchall():
         user_list.append(user[0])
     return user_list
+
+
+# Запись события в БД
+async def event_recording(user_id: str, word_id: str = None, event: str = None):
+    created_at = datetime.utcnow()
+    try:
+        query = """INSERT INTO events(user_id
+                                    ,word_id
+                                    ,event
+                                    ,created_at) VALUES(?, ?, ?, ?)"""
+        cur.execute(query, (user_id, word_id, event, created_at))
+        db.commit()
+    except:
+        pass
 
 
 # Любой запрос к БД через ТГ сообщение
