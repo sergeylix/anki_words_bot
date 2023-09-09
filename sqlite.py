@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta
+from random import shuffle
 import time
 import os
 import pandas as pd
@@ -183,7 +184,7 @@ async def get_users_w_access() -> list:
             users_w_access.append(int(user[0]))
         return users_w_access
 
-# Получаем тип 
+# Получаем тип пользователя
 async def get_auth_access() -> int:
     query = """SELECT is_auth_access FROM auth_access LIMIT 1"""
     is_auth_access = cur.execute(query.format(flg=1)).fetchone()[0]
@@ -258,6 +259,13 @@ async def create_profile(user_id: str, full_name: str):
         cur.execute("INSERT INTO notifications(user_id, notifications_interval, next_notifications_date, created_at, update_date) VALUES(?, ?, ?, ?, ?)", 
                     (user_id, notifications_interval, next_notifications_date, created_at, update_date))
         db.commit()
+
+
+# Обновляем последнюю дату активности пользователя
+async def update_last_activity(user_id: str):
+    last_activity = datetime.utcnow()
+    cur.execute("UPDATE profile SET last_activity = '{last_activity}' WHERE user_id = '{key}'".format(last_activity=last_activity, key=user_id))
+    db.commit()
 
 
 # Добавление базовых слов
@@ -498,11 +506,18 @@ def cards(user_id: str, group: str) -> list:
                     ORDER BY reminder_date
                     LIMIT 10"""
     users_cards = cur.execute(query.format(key=user_id, group=group)).fetchall()
+    cards_w_rev_flg = []
+    for card in users_cards: # добавляем флаг rev показывается слово или перевод: False = слово
+        card_w_rev_flg = (card[0], card[1], card[2], False)
+        cards_w_rev_flg.append(card_w_rev_flg)
+    users_cards = cards_w_rev_flg
+    shuffle(users_cards) # перемешиваем элементы списка
     rev = []
     rev_card = ()
     for card in users_cards:
-        rev_card = (card[0], card[2], card[1])
+        rev_card = (card[0], card[2], card[1], True)
         rev.append(rev_card)
+    shuffle(rev)
     users_cards = users_cards + rev
     return users_cards
 
@@ -568,23 +583,45 @@ async def download_csv(user_id: str, group: str) -> str:
 
 
 # Обновление даты для повторения
-async def update_remind_date(user_id: str, word_id: str, remind_in: str):
-    query = """UPDATE words
-                SET reminder_date = '{update_date}'
-                WHERE user_id == '{key}'
-                AND word_id == '{word_id}'"""
+async def update_remind_date(user_id: str, word_id: str, remind_in: str, rev: bool):
     if remind_in == "remind in 1 day":
         remind_in_days = 0.9
+        next_reminder_interval = 1
+        num_click_button = 'num_click_first_button'
     elif remind_in == "remind in 7 day":
         remind_in_days = 7
+        next_reminder_interval = 7
+        num_click_button = 'num_click_second_button'
     elif remind_in == "remind in 30 day":
         remind_in_days = 30
+        next_reminder_interval = 30
+        num_click_button = 'num_click_third_button'
     elif remind_in == "remind in 90 day":
         remind_in_days = 90
+        next_reminder_interval = 90
+        num_click_button = 'num_click_fourth_button'
     else:
         remind_in_days = 0
     update_date = (datetime.utcnow() + timedelta(days = remind_in_days))
-    cur.execute(query.format(update_date=update_date, key=user_id, word_id=word_id))
+    if not rev: # если показано само слова, а не перевод
+        query = """UPDATE words
+                    SET reminder_date = '{update_date}', next_reminder_interval = '{next_reminder_interval}', {num_click_button} = IFNULL({num_click_button}, 0) + 1
+                    WHERE user_id == '{key}'
+                    AND word_id == '{word_id}'"""
+        cur.execute(query.format(update_date=update_date
+                        ,next_reminder_interval=next_reminder_interval
+                        ,num_click_button=num_click_button
+                        ,key=user_id
+                        ,word_id=word_id))
+    else:
+        query = """UPDATE words
+                    SET reminder_date = '{update_date}', next_reminder_interval = '{next_reminder_interval}'
+                    WHERE user_id == '{key}'
+                    AND word_id == '{word_id}'"""
+        cur.execute(query.format(update_date=update_date
+                        ,next_reminder_interval=next_reminder_interval
+                        ,key=user_id
+                        ,word_id=word_id))
     db.commit()
 
 
@@ -691,9 +728,17 @@ async def any_query(query:str) -> str:
         except:
             messege = message_texts.MSG_SQL_QUERY_ERROR
     elif sql_command in ('SELECT', 'WITH'):
-        query = query + '\n limit 20'
+        if 'LIMIT' not in query.upper():
+            query = query + '\n LIMIT 20'
         try:
-            for row in cur.execute(query).fetchall():
+            data = cur.execute(query)
+            for count, column in enumerate(data.description):
+                if count == 0:
+                    output = output + str(column[0])
+                else:
+                    output = output + ' | ' + str(column[0])
+            output = output + "\n"
+            for row in data.fetchall():
                 for count, value in enumerate(row):
                     if count == 0:
                         output = output + str(row[count])

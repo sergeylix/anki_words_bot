@@ -14,10 +14,12 @@ import asyncio
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 import message_texts
 from sqlite import db_start, get_files, add_file_row, update_file_row, get_auth_access, add_access, get_users_w_access,\
-    create_profile, words_exists, add_basic_words, del_basic_words, insert_words, select_words, delete_word, delete_all_words,\
-    actual_user_group, all_user_groups, change_cards_group, cards,\
+    create_profile, words_exists, update_last_activity, add_basic_words, del_basic_words, insert_words, select_words, delete_word,\
+    delete_all_words, actual_user_group, all_user_groups, change_cards_group, cards,\
     update_remind_date, words_num, select_duplicate, upload_csv, download_csv, update_group, actual_user_notification_interval,\
-        update_notification_interval, user_list_to_send_notifications, user_list_to_send_message, any_query
+    update_notification_interval, user_list_to_send_notifications, user_list_to_send_message, any_query
+
+# All timestamp in UTC: -3 hour from msk
 
 logging.basicConfig(level=logging.INFO)
 
@@ -91,6 +93,7 @@ def users_access(func):
         global users_w_access
         if message['from']['id'] not in users_w_access:
             return await message.reply("Access Denied.\nTo get access run — /access_request")
+        await update_last_activity(message['from']['id'])
         return await func(message, *args, **kwargs)
     
     return wrapper
@@ -925,7 +928,7 @@ async def next_cards(callback_query: types.CallbackQuery, state: FSMContext, *ar
         user_id = callback_query.from_user.id
         remind_in = callback_query.data
         logging.info(f'Обновлена дата карточки | {user_id=}, {time.asctime()}')
-        await update_remind_date(user_id, word_id = users_cards[index_num][0], remind_in = remind_in)
+        await update_remind_date(user_id, word_id = users_cards[index_num][0], remind_in = remind_in, rev = users_cards[index_num][3])
         await callback_query.message.delete_reply_markup() # удаляем инлайновую клавиатуру
         await callback_query.answer(users_cards[index_num][1]) # завершаем коллбэк
 
