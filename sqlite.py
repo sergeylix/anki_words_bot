@@ -141,6 +141,16 @@ async def db_start():
     cur.execute(query)
     db.commit()
 
+    # Создание таблицы с языками интерфейса у пользователя
+    query = """CREATE TABLE IF NOT EXISTS user_language(
+                    user_id TEXT PRIMARY KEY,
+                    language TEXT DEFAULT "EN" NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+                    update_date TIMESTAMP,
+                    FOREIGN KEY (user_id) REFERENCES profile(user_id))"""
+    cur.execute(query)
+    db.commit()
+
 
 # Получаем список файлов из БД
 async def get_files(file_name: str = None) -> list:
@@ -188,12 +198,33 @@ async def update_file_row(file_name: str, file_id_new: str):
 
 
 # Получаем список пользователей с доступами
+# async def get_users_w_access() -> list:
+#         users_w_access = []
+#         query = """SELECT user_id FROM access WHERE access = '{flg}'"""
+#         for user in cur.execute(query.format(flg=1)).fetchall():
+#             users_w_access.append(int(user[0]))
+#         return users_w_access
+
+
 async def get_users_w_access() -> list:
         users_w_access = []
-        query = """SELECT user_id FROM access WHERE access = '{flg}'"""
+        users_info = {}
+        info = {}
+        query = """SELECT a.user_id, b.language
+                    FROM access a
+                    LEFT JOIN user_language b on a.user_id = b.user_id
+                    WHERE a.access = '{flg}'"""
         for user in cur.execute(query.format(flg=1)).fetchall():
+            info = {'language': str(user[1])}
+            users_info[int(user[0])] = info
             users_w_access.append(int(user[0]))
-        return users_w_access
+        print(users_info)
+        return users_w_access, users_info
+
+
+
+
+
 
 # Получаем тип пользователя
 async def get_auth_access() -> int:
@@ -241,6 +272,16 @@ def words_exists(user_id: str) -> bool:
     return words_exists
 
 
+# Проверка, что у пользователя есть язык интерфейса
+def language_exists(user_id: str) -> bool:
+    language = cur.execute("SELECT 1 FROM user_language WHERE user_id == '{key}'".format(key=user_id)).fetchone()
+    if not language:
+        language_exists=False
+    else:
+        language_exists=True
+    return language_exists
+
+
 # Выдача прав пользователю
 async def add_access(users:  list, flg: int):
     for user_id in users:
@@ -261,6 +302,10 @@ async def create_profile(user_id: str, full_name: str):
     if not profile_exists(user_id):
         cur.execute("INSERT INTO profile(user_id, full_name) VALUES(?, ?)", (user_id, full_name))
         db.commit()
+    
+    if not language_exists(user_id):
+        cur.execute("INSERT INTO user_language(user_id, language) VALUES(?, ?)", (user_id, 'EN'))
+        db.commit()
 
     if not notification_exists(user_id):
         notifications_interval = 7 # week
@@ -273,6 +318,13 @@ async def create_profile(user_id: str, full_name: str):
 
 
 # Обновляем последнюю дату активности пользователя
+async def update_user_language(user_id: str, language: str):
+    update_date = datetime.utcnow()
+    cur.execute("UPDATE user_language SET update_date = '{update_date}', language = '{language}' WHERE user_id = '{key}'".format(update_date=update_date, language=language, key=user_id))
+    db.commit()
+
+
+# Обновляем язык интерфейса пользователя
 async def update_last_activity(user_id: str):
     last_activity = datetime.utcnow()
     cur.execute("UPDATE profile SET last_activity = '{last_activity}' WHERE user_id = '{key}'".format(last_activity=last_activity, key=user_id))
@@ -280,9 +332,9 @@ async def update_last_activity(user_id: str):
 
 
 # Добавление базовых слов
-async def add_basic_words(user_id: str):
+async def add_basic_words(user_id: str, user_language: str):
     user_added_word = user_id
-    basic_words = message_texts.MSG_ONBOARDING_BASIC_WORDS
+    basic_words = message_texts.MSG_ONBOARDING_BASIC_WORDS[user_language]
     for row in basic_words.split('\n'):
         words = [word.strip() for word in row.split('=', 2)]
         reminder_date = (datetime.utcnow() + timedelta(days=0))
@@ -315,11 +367,11 @@ async def insert_words(user_id: str, user_message: str):
 
 
 # Вывод последних добавленных слов
-async def select_words(user_id: str) -> str:
+async def select_words(user_id: str, user_language: str) -> str:
     message = ""
     clients_words = ""
     if not profile_exists(user_id):
-        message = message_texts.MSG_NO_WORDS
+        message = message_texts.MSG_NO_WORDS[user_language]
     else:
         query = """SELECT word, translation, category
                     FROM words 
@@ -332,25 +384,25 @@ async def select_words(user_id: str) -> str:
             else:
                 clients_words = clients_words + word[0] + " | " + word[1] + " (" +  word[2] + ")" +"\n"
         if clients_words == "":
-             message = message_texts.MSG_NO_WORDS
+             message = message_texts.MSG_NO_WORDS[user_language]
         else:
-            message = message_texts.MSG_WORDS_LAST.format(clients_words=clients_words)
+            message = message_texts.MSG_WORDS_LAST[user_language].format(clients_words=clients_words)
     return message
 
 
 # Кол-во сохраненных слов всего
-async def words_num(user_id: str) -> str:
+async def words_num(user_id: str, user_language: str) -> str:
     message = ""
     words_in_group = ""
     if not profile_exists(user_id):
-        message = message_texts.MSG_NO_WORDS
+        message = message_texts.MSG_NO_WORDS[user_language]
     else:
         # всего слов
         query = """SELECT count(word_id)
                     FROM words 
                     WHERE user_id == '{key}'"""
         words_num = cur.execute(query.format(key=user_id)).fetchone()[0]
-        message = message_texts.MSG_WORDS_NUM.format(words_num=words_num)
+        message = message_texts.MSG_WORDS_NUM[user_language].format(words_num=words_num)
         # в группах
         query = """SELECT category
 	                    ,count(distinct a.word_id) as words_num
@@ -361,12 +413,12 @@ async def words_num(user_id: str) -> str:
         for word in cur.execute(query.format(key=user_id)).fetchall():
             words_in_group = words_in_group + str(word[0]) + " — " + str(word[1]) + "\n"
         if words_in_group:
-            message = message + "\n\n" + message_texts.MSG_WORDS_NUM_GROUP.format(words_in_group=words_in_group)
+            message = message + "\n\n" + message_texts.MSG_WORDS_NUM_GROUP[user_language].format(words_in_group=words_in_group)
     return message
 
 
 # Удаление слова
-async def delete_word(user_id: str, state) -> str:
+async def delete_word(user_id: str, user_language: str, state) -> str:
     async with state.proxy() as data:
         try:
             query = """SELECT 1 
@@ -375,7 +427,7 @@ async def delete_word(user_id: str, state) -> str:
                         AND (translation == '{word}' OR word == '{word}')"""
             word_for_del = cur.execute(query.format(key=user_id, word=data['word_for_delete'])).fetchone()
             if not word_for_del:
-                message = message_texts.MSG_DELETE_ERROR
+                message = message_texts.MSG_DELETE_ERROR[user_language]
             else:
                 query = """DELETE 
                             FROM words 
@@ -383,23 +435,23 @@ async def delete_word(user_id: str, state) -> str:
                             AND (translation == '{word}' OR word == '{word}')"""
                 cur.execute(query.format(key=user_id, word=data['word_for_delete']))
                 db.commit()
-                message = message_texts.MSG_DELETE_DELETED
+                message = message_texts.MSG_DELETE_DELETED[user_language]
         except:
-            message = message_texts.MSG_DELETE_ERROR_DB
+            message = message_texts.MSG_DELETE_ERROR_DB[user_language]
     return message
 
 
 # Удаление всех слов пользователя
-async def delete_all_words(user_id: str) -> str:
+async def delete_all_words(user_id: str, user_language: str) -> str:
     if not profile_exists(user_id):
-        message = message_texts.MSG_NO_WORDS
+        message = message_texts.MSG_NO_WORDS[user_language]
     else:
         query = """DELETE 
                     FROM words 
                     WHERE user_id == '{key}'"""
         cur.execute(query.format(key=user_id))
         db.commit()
-        message = message_texts.MSG_DELETE_ALL_DELETED
+        message = message_texts.MSG_DELETE_ALL_DELETED[user_language]
     return message
 
 
@@ -637,7 +689,7 @@ async def update_remind_date(user_id: str, word_id: str, remind_in: str, rev: bo
 
 
 # Вывести дублирующиеся слова
-async def select_duplicate(user_id: str) -> str:
+async def select_duplicate(user_id: str, user_language: str) -> str:
     message = ""
     duplicates = ""
     query = """WITH duplicates as (
@@ -656,9 +708,9 @@ async def select_duplicate(user_id: str) -> str:
     for word in cur.execute(query.format(key=user_id)).fetchall():
         duplicates = duplicates + str(word[0]) + " — " + str(word[1]) + " | " + str(word[2]) + "\n"
     if duplicates == "":
-        message = message_texts.MSG_DUPLICATE_NO_WORDS
+        message = message_texts.MSG_DUPLICATE_NO_WORDS[user_language]
     else:
-        message = message_texts.MSG_DUPLICATE.format(duplicates=duplicates)
+        message = message_texts.MSG_DUPLICATE[user_language].format(duplicates=duplicates)
     return message
 
 
@@ -701,17 +753,21 @@ async def user_list_to_send_notifications() -> list:
     today = str(datetime.utcnow() + timedelta(seconds=1))
     user_list = []
     user_dict = {'user_id': str(),
-                'notifications_interval': int()}
+                'notifications_interval': int(),
+                'user_language': str()}
     query = """SELECT DISTINCT n.user_id
                              , n.notifications_interval
+                             , coalesce(l.language,'EN') as language
             FROM notifications n
             INNER JOIN access a ON a.user_id = n.user_id AND a.access = 1
+            LEFT JOIN user_language l on n.user_id = l.user_id
             WHERE notifications_interval IS NOT NULL
             AND datetime(n.next_notifications_date) <= datetime('{today}')
             ORDER BY n.user_id"""
     for user in cur.execute(query.format(today=today)).fetchall():
         user_dict['user_id'] = str(user[0])
         user_dict['notifications_interval'] = str(user[1])
+        user_dict['user_language'] = str(user[2])
         user_list.append(user_dict.copy())
     return user_list
 
