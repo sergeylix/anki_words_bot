@@ -216,7 +216,7 @@ The group of words has been selected: <b>{group}</b>
 }
 
 MSG_CARDS_INFO = {
-    'EN':"""🚀 Card mode is enabled.
+    'EN':"""🚀 Card mode is activated.
 You'll be shown 10 words + 10 of their translations.
 For each word, you can show the translation and then choose how many days to show that word in card mode next time:
 1 — after 1 day

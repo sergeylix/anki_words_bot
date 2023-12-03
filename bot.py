@@ -216,7 +216,7 @@ async def setup_bot_commands():
         types.BotCommand("delete", "Delete one word mode"),
         types.BotCommand("delete_all", "Delete all words mode"),
         types.BotCommand("cancel", "Turn off any mode"),
-        types.BotCommand("help", "Show bot information"),
+        types.BotCommand("help", "Help"),
         types.BotCommand("language", "Change interface language"),
         types.BotCommand("notifications", "Set up notifications"),
         types.BotCommand("donate", "Support the project")
@@ -1404,14 +1404,18 @@ async def echo(message: types.Message, user_language: str, *args, **kwargs):
 # расписание подготовка списка
 async def sched():
     try:
-        user_list = await user_list_to_send_notifications()
-        # user_list = [{'user_id': '91523724', 'notifications_interval': str(1), 'user_language': 'EN'}] # заглушка для уведомлений только себе
+        count = 0
+        user_list = await user_list_to_send_notifications() # прод
+        # user_list = [{'user_id': '91523724', 'notifications_interval': str(1), 'user_language': 'EN'}] # тест, заглушка для уведомлений только себе
         for user in user_list:
             if user['user_id'].isnumeric():
                 try:
                     answer_message = message_texts.MSG_NOTIFICATIONS[user['user_language']]
-                    await bot.send_message(user['user_id'], answer_message)
+                    if await bot.send_message(user['user_id'], answer_message):
+                        count += 1
                     await update_notification_interval(user['user_id'], user['notifications_interval'])
+                    # 20 messages per second (Limit: 30 messages per second)
+                    await asyncio.sleep(.05)
                 except:
                     pass
     except: 
@@ -1419,7 +1423,7 @@ async def sched():
 
 
 scheduler = AsyncIOScheduler(timezone=utc)
-# scheduler.add_job(sched, trigger='cron', hour='17', minute='53') # тест
+# scheduler.add_job(sched, trigger='cron', hour='17', minute='47') # тест
 scheduler.add_job(sched, trigger='cron', hour='16', minute='45') # прод
 scheduler.start()
 
