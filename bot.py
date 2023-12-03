@@ -209,8 +209,8 @@ def inline_buttons_notifications(user_language: str):
 async def setup_bot_commands():
     bot_commands = [
         types.BotCommand("cards", "Start cards mode"),
-        types.BotCommand("words", "Show last 15 words"),
-        types.BotCommand("words_num", "Show word count"),
+        types.BotCommand("words", "Show the last 15 saved words"),
+        types.BotCommand("words_num", "Show the number of saved words"),
         types.BotCommand("duplicates", "Show duplicate words"),
         types.BotCommand("import_export", "Upload or download words"),
         types.BotCommand("delete", "Delete one word mode"),
@@ -1310,13 +1310,17 @@ async def execute_send_for_all(message: types.Message, state: FSMContext, *args,
     message_for_all = message.text
     user_list = await user_list_to_send_message()
     list_not_delivered = []
+    count = 0
     for user_id in user_list:
         try:
-            await bot.send_message(user_id, message_for_all, parse_mode = 'HTML')
+            if await bot.send_message(user_id, message_for_all, parse_mode = 'HTML'):
+                count += 1
+            # 20 messages per second (Limit: 30 messages per second)
+            await asyncio.sleep(.05)
         except:
             list_not_delivered.append(user_id)
-    answer_message = message_texts.MSG_SEND_FOR_ALL_SUCCESS.format(not_delivered=list_not_delivered)
-    await message.reply(answer_message, reply=False)
+    answer_message = message_texts.MSG_SEND_FOR_ALL_SUCCESS.format(count=count,not_delivered=list_not_delivered)
+    await message.reply(answer_message, reply=False, parse_mode = 'HTML')
     await state.finish()
 
 

@@ -218,7 +218,6 @@ async def get_users_w_access() -> list:
             info = {'language': str(user[1])}
             users_info[int(user[0])] = info
             users_w_access.append(int(user[0]))
-        print(users_info)
         return users_w_access, users_info
 
 

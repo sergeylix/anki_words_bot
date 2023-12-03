@@ -86,16 +86,16 @@ EXAMPLE: <b>contento = glad = feelings</b>\n
 
 MSG_COMANDS = {
     'EN':"""🤖 All commands:
-/cards — card mode
+/cards — start cards mode
 /words — show the last 15 saved words
 /words_num — show the number of saved words
 /duplicates — show duplicate words
 /import_export — upload or download words
-/delete — single word deletion mode
-/delete_all — the mode of deleting all words
-/cancel — exit any mode
+/delete — delete one word mode
+/delete_all — delete all words mode
+/cancel — turn off any mode
 /language — 🇬🇧 change interface language
-/notifications — customize notifications
+/notifications — set up notifications
 /onboarding — quick start
 /donate — support the project"""
 
@@ -139,7 +139,7 @@ MSG_NO_WORDS = {
 """----------------------------------------------------------------------"""
 
 MSG_ONBOARDING_START = {
-    'EN':"""⚡️ For a quick start, use the command - /onboarding
+    'EN':"""⚡️ For a quick start, use the command — /onboarding
 It explains the basic features of the bot in 5 steps."""
 
     ,'RU':"""⚡️ Для быстрого старта воспользуйся командой — /onboarding
@@ -670,7 +670,7 @@ MSG_COMMAND_NOT_DEFINED = {
 """----------------------------------------------------------------------"""
 
 MSG_SEND_FOR_ALL = """✉️ Напиши сообщение, которое получат все пользователи.\n\nДля отмены — /cancel"""
-MSG_SEND_FOR_ALL_SUCCESS = """✔️ Сообщения отправлены всем кроме:\n{not_delivered}"""
+MSG_SEND_FOR_ALL_SUCCESS = """✔️ Сообщения отправлены пользователям: <b>{count}</b>.\nНедоставлено:\n{not_delivered}"""
 
 """----------------------------------------------------------------------"""
 """-----------------------------SQL QUERY--------------------------------"""
