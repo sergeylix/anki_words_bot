@@ -151,8 +151,8 @@ def inline_buttons_word_options(user_language: str):
 
 def inline_buttons_word_delete(user_language: str):
     ib_word_delete = types.InlineKeyboardMarkup(row_width=2)
-    b1 = types.InlineKeyboardButton(text=message_texts.WORD_OPTIONS_DELETED_SURE[user_language], callback_data='delete_word')
-    b2 = types.InlineKeyboardButton(text=message_texts.KB_WORD_OPTIONS_BACK[user_language], callback_data='options')
+    b1 = types.InlineKeyboardButton(text=message_texts.KB_CARD_OPTIONS_DELETED_SURE[user_language], callback_data='delete_word')
+    b2 = types.InlineKeyboardButton(text=message_texts.KB_CARD_OPTIONS_DELETE_BACK[user_language], callback_data='options')
 
     ib_word_delete.add(b1)
     ib_word_delete.row(b2)

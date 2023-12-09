@@ -706,17 +706,21 @@ KB_WORD_OPTIONS_DELETE = {
     'EN':"Delete this word"
     ,'RU':"Удалить это слово"
 }
-WORD_OPTIONS_DELETED_SURE = {
+KB_WORD_OPTIONS_BACK = {
+    'EN':"Back to cards"
+    ,'RU':"Вернуться назад"
+}
+KB_CARD_OPTIONS_DELETED_SURE = {
     'EN':"Yes, delete this word"
     ,'RU':"Да, удали это слово"
+}
+KB_CARD_OPTIONS_DELETE_BACK = {
+    'EN':"Back to options"
+    ,'RU':"Вернуться назад"
 }
 WORD_OPTIONS_DELETED = {
     'EN':"(deleted)"
     ,'RU':"(удалено)"
-}
-KB_WORD_OPTIONS_BACK = {
-    'EN':"Back to cards"
-    ,'RU':"Вернуться назад"
 }
 
 KB_UPLOAD_YES = {
