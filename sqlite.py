@@ -417,26 +417,42 @@ async def words_num(user_id: str, user_language: str) -> str:
 
 
 # Удаление слова
-async def delete_word(user_id: str, user_language: str, state) -> str:
-    async with state.proxy() as data:
-        try:
-            query = """SELECT 1 
-                        FROM words 
-                        WHERE user_id == '{key}'
-                        AND (translation == '{word}' OR word == '{word}')"""
-            word_for_del = cur.execute(query.format(key=user_id, word=data['word_for_delete'])).fetchone()
-            if not word_for_del:
-                message = message_texts.MSG_DELETE_ERROR[user_language]
-            else:
-                query = """DELETE 
+async def delete_word(user_id: str, user_language: str, state, word_id: str =None) -> str:
+    current_state = await state.get_state()
+    if current_state == 'FSMDelete:word_for_delete':
+        async with state.proxy() as data:
+            try:
+                query = """SELECT 1 
                             FROM words 
                             WHERE user_id == '{key}'
                             AND (translation == '{word}' OR word == '{word}')"""
-                cur.execute(query.format(key=user_id, word=data['word_for_delete']))
+                word_for_del = cur.execute(query.format(key=user_id, word=data['word_for_delete'])).fetchone()
+                if not word_for_del:
+                    message = message_texts.MSG_DELETE_ERROR[user_language]
+                else:
+                    query = """DELETE 
+                                FROM words 
+                                WHERE user_id == '{key}'
+                                AND (translation == '{word}' OR word == '{word}')"""
+                    cur.execute(query.format(key=user_id, word=data['word_for_delete']))
+                    db.commit()
+                    message = message_texts.MSG_DELETE_DELETED[user_language]
+            except:
+                message = message_texts.MSG_DELETE_ERROR_DB[user_language]
+    elif current_state == 'FSMCard:word_for_reminder':
+        async with state.proxy() as data:
+            try:
+                query = """DELETE 
+                            FROM words 
+                            WHERE user_id == '{key}'
+                            AND word_id == '{word_id}'"""
+                cur.execute(query.format(key=user_id, word_id=word_id))
                 db.commit()
                 message = message_texts.MSG_DELETE_DELETED[user_language]
-        except:
-            message = message_texts.MSG_DELETE_ERROR_DB[user_language]
+            except:
+                message = 'Error during deletion'
+    else:
+        message = 'Error during deletion'
     return message
 
 
@@ -664,6 +680,8 @@ async def update_remind_date(user_id: str, word_id: str, remind_in: str, rev: bo
         num_click_button = 'num_click_fourth_button'
     else:
         remind_in_days = 0
+        next_reminder_interval = 0
+        rev = True # чтобы не обновлять столбце 'num_click_button'
     update_date = (datetime.utcnow() + timedelta(days = remind_in_days))
     if not rev: # если показано само слова, а не перевод
         query = """UPDATE words

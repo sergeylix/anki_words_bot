@@ -697,6 +697,27 @@ KB_CARDS_SHOW_CANCEL = {
     'EN':"Cancel"
     ,'RU':"Отмена"
 }
+KB_CARDS_SHOW_OPTIONS = {
+    'EN':"Options"
+    ,'RU':"Параметры"
+}
+
+KB_WORD_OPTIONS_DELETE = {
+    'EN':"Delete this word"
+    ,'RU':"Удалить это слово"
+}
+WORD_OPTIONS_DELETED_SURE = {
+    'EN':"Yes, delete this word"
+    ,'RU':"Да, удали это слово"
+}
+WORD_OPTIONS_DELETED = {
+    'EN':"(deleted)"
+    ,'RU':"(удалено)"
+}
+KB_WORD_OPTIONS_BACK = {
+    'EN':"Back to cards"
+    ,'RU':"Вернуться назад"
+}
 
 KB_UPLOAD_YES = {
     'EN':"Yes, save the words"

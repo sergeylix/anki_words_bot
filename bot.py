@@ -126,7 +126,7 @@ def inline_buttons_translation(user_language: str):
     ib_translation.row(b2)
     return ib_translation
 
-# Через сколько дней напомнить
+# Карточки - Через сколько дней напомнить
 def inline_buttons_reminder(user_language: str):
     ib_reminder = types.InlineKeyboardMarkup(row_width=4)
     b2 = types.InlineKeyboardButton(text=message_texts.KB_CARDS_SHOW_CANCEL[user_language], callback_data='cancel')
@@ -134,10 +134,29 @@ def inline_buttons_reminder(user_language: str):
     b4 = types.InlineKeyboardButton(text='7', callback_data='remind in 7 day')
     b5 = types.InlineKeyboardButton(text='30', callback_data='remind in 30 day')
     b6 = types.InlineKeyboardButton(text='90', callback_data='remind in 90 day')
+    b7 = types.InlineKeyboardButton(text=message_texts.KB_CARDS_SHOW_OPTIONS[user_language], callback_data='options')
 
     ib_reminder.add(b3, b4, b5, b6)
-    ib_reminder.row(b2)
+    ib_reminder.row(b7, b2)
     return ib_reminder
+
+def inline_buttons_word_options(user_language: str):
+    ib_word_options = types.InlineKeyboardMarkup(row_width=2)
+    b1 = types.InlineKeyboardButton(text=message_texts.KB_WORD_OPTIONS_DELETE[user_language], callback_data='delete')
+    b2 = types.InlineKeyboardButton(text=message_texts.KB_WORD_OPTIONS_BACK[user_language], callback_data='back')
+
+    ib_word_options.add(b1)
+    ib_word_options.row(b2)
+    return ib_word_options
+
+def inline_buttons_word_delete(user_language: str):
+    ib_word_delete = types.InlineKeyboardMarkup(row_width=2)
+    b1 = types.InlineKeyboardButton(text=message_texts.WORD_OPTIONS_DELETED_SURE[user_language], callback_data='delete_word')
+    b2 = types.InlineKeyboardButton(text=message_texts.KB_WORD_OPTIONS_BACK[user_language], callback_data='options')
+
+    ib_word_delete.add(b1)
+    ib_word_delete.row(b2)
+    return ib_word_delete
 
 # Загружаем слова из CSV
 def inline_buttons_upload(user_language: str):
@@ -1041,7 +1060,7 @@ async def load_cards(message: types.Message, user_language: str, state: FSMConte
     await update_next_notification(user_id)
 
 # Ответ на колбэк показываем перевод
-@dp.callback_query_handler(filters.Text(contains=['translation']), state=FSMCard.word_for_reminder) 
+@dp.callback_query_handler(filters.Text(contains=['translation']) | filters.Text(contains=['back']), state=FSMCard.word_for_reminder) 
 @users_access
 async def translation(callback_query: types.CallbackQuery, user_language: str, state: FSMContext, *args, **kwargs):
     
@@ -1051,17 +1070,18 @@ async def translation(callback_query: types.CallbackQuery, user_language: str, s
         chat_id = data['word_for_reminder']['chat_id']
         cards_send_message = data['word_for_reminder']['cards_send_message']
         user_id = callback_query.from_user.id
-        await callback_query.message.delete_reply_markup() # удаляем инлайновую клавиатуру
+        # await callback_query.message.delete_reply_markup() # удаляем инлайновую клавиатуру
         cards_edited_message_id = cards_send_message['message_id']
         cards_edited_message_text = cards_send_message['text'] + " | " + users_cards[index_num][2]
         await bot.edit_message_text(text=cards_edited_message_text, chat_id=chat_id, message_id=cards_edited_message_id, reply_markup=inline_buttons_reminder(user_language))
-        await callback_query.answer(users_cards[index_num][1]) # завершаем коллбэк
+        # await callback_query.answer(users_cards[index_num][1], show_alert = False) # завершаем коллбэк
+        await callback_query.answer() # завершаем коллбэк
         # events
         logging.info(f'Показан перевод карточки | {user_id=}, {time.asctime()}')
         await event_recording(user_id=user_id, word_id=users_cards[index_num][0], event='showing_translation')
 
 # Ответ на колбэк следующее слово
-@dp.callback_query_handler(filters.Text(contains=['remind in']), state=FSMCard.word_for_reminder) 
+@dp.callback_query_handler(filters.Text(contains=['remind in']) | filters.Text(contains=['delete_word']), state=FSMCard.word_for_reminder) 
 @users_access
 async def next_cards(callback_query: types.CallbackQuery, user_language: str, state: FSMContext, *args, **kwargs):
 
@@ -1069,17 +1089,48 @@ async def next_cards(callback_query: types.CallbackQuery, user_language: str, st
         users_cards = data['word_for_reminder']['users_cards']
         total_num = data['word_for_reminder']['total_num']
         index_num = data['word_for_reminder']['index_num']
+        chat_id = data['word_for_reminder']['chat_id']
         cards_send_message = data['word_for_reminder']['cards_send_message']
-
+        cards_edited_message_id = cards_send_message['message_id']
         user_id = callback_query.from_user.id
         remind_in = callback_query.data
-        await update_remind_date(user_id, word_id = users_cards[index_num][0], remind_in = remind_in, rev = users_cards[index_num][3])
-        await callback_query.message.delete_reply_markup() # удаляем инлайновую клавиатуру
-        await callback_query.answer(users_cards[index_num][1]) # завершаем коллбэк
-        # events
-        logging.info(f'Обновлена дата карточки | {user_id=}, {time.asctime()}')
-        await event_recording(user_id=user_id, word_id=users_cards[index_num][0], event='selecting_reminder_interval')
 
+        if remind_in == 'delete_word':# Удаление слова
+            message = callback_query.message.text
+            cards_edited_message_text = "<strike>" + message + "</strike> " + message_texts.WORD_OPTIONS_DELETED[user_language]
+            word_id = users_cards[index_num][0]
+            await callback_query.message.delete_reply_markup() # удаляем инлайновую клавиатуру
+            answer_message = await delete_word(user_id, user_language, state, word_id)
+            if answer_message != 'Error during deletion':
+                await bot.edit_message_text(text=cards_edited_message_text, chat_id=chat_id, message_id=cards_edited_message_id, parse_mode = 'HTML')
+            await callback_query.answer() # завершаем коллбэк
+
+            # Удаляем слово из текущего списка слов
+            count = 0
+            for card in users_cards:
+                if count > index_num and card[0] == word_id:
+                    del users_cards[count]
+                    data['word_for_reminder']['users_cards'] = users_cards
+                    total_num = total_num - 1
+                    data['word_for_reminder']['total_num'] = total_num
+                    total_num = data['word_for_reminder']['total_num']
+                    break
+                count += 1
+            
+            # events
+            logging.info(f'Удаление слова из параметров слова | {user_id=}, {time.asctime()}')
+            await event_recording(user_id=user_id, word_id=users_cards[index_num][0], event='word_options_delete')
+
+        else: # Установление даты напоминания
+            await update_remind_date(user_id, word_id = users_cards[index_num][0], remind_in = remind_in, rev = users_cards[index_num][3])
+            await callback_query.message.delete_reply_markup() # удаляем инлайновую клавиатуру
+            # await callback_query.answer(users_cards[index_num][1], show_alert = False) # завершаем коллбэк
+            await callback_query.answer() # завершаем коллбэк
+            # events
+            logging.info(f'Обновлена дата карточки | {user_id=}, {time.asctime()}')
+            await event_recording(user_id=user_id, word_id=users_cards[index_num][0], event='selecting_reminder_interval')
+
+        # Следующее слово
         index_num += 1
         if index_num > total_num - 1:
             answer_message = message_texts.MSG_CARDS_FINISH[user_language]
@@ -1092,9 +1143,44 @@ async def next_cards(callback_query: types.CallbackQuery, user_language: str, st
             word_for_reminder = users_cards[index_num][1]
             cards_send_message = await bot.send_message(user_id, word_for_reminder, reply_markup=inline_buttons_translation(user_language))
             cards_send_message
-            async with state.proxy() as data:
-                data['word_for_reminder']['index_num'] = index_num
-                data['word_for_reminder']['cards_send_message'] = cards_send_message
+            # async with state.proxy() as data:
+            data['word_for_reminder']['index_num'] = index_num
+            data['word_for_reminder']['cards_send_message'] = cards_send_message
+
+
+# Ответ на колбэк - Параметры слова
+@dp.callback_query_handler(filters.Text(contains=['options']), state=FSMCard.word_for_reminder) 
+@users_access
+async def next_cards(callback_query: types.CallbackQuery, user_language: str, state: FSMContext, *args, **kwargs):
+
+    async with state.proxy() as data:
+        users_cards = data['word_for_reminder']['users_cards']
+        index_num = data['word_for_reminder']['index_num']
+        user_id = callback_query.from_user.id
+
+        await callback_query.message.edit_reply_markup(reply_markup=inline_buttons_word_options(user_language))
+        await callback_query.answer() # завершаем коллбэк
+        # events
+        logging.info(f'Переход в параметры слова из карточек | {user_id=}, {time.asctime()}')
+        await event_recording(user_id=user_id, word_id=users_cards[index_num][0], event='word_options')
+
+
+# Ответ на колбэк - Параметры слова - УДАЛИТЬ?
+@dp.callback_query_handler(filters.Text(contains=['delete']), state=FSMCard.word_for_reminder) 
+@users_access
+async def next_cards(callback_query: types.CallbackQuery, user_language: str, state: FSMContext, *args, **kwargs):
+
+    async with state.proxy() as data:
+        users_cards = data['word_for_reminder']['users_cards']
+        index_num = data['word_for_reminder']['index_num']
+        user_id = callback_query.from_user.id
+
+        await callback_query.message.edit_reply_markup(reply_markup=inline_buttons_word_delete(user_language))
+        await callback_query.answer() # завершаем коллбэк
+        # events
+        logging.info(f'Уточнение в удалении слова | {user_id=}, {time.asctime()}')
+        await event_recording(user_id=user_id, word_id=users_cards[index_num][0], event='deleting_word')
+
 
 # Ответ на колбэк - отмена
 @dp.callback_query_handler(filters.Text(contains=['cancel']), state=FSMCard.word_for_reminder) 
