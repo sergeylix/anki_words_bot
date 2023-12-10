@@ -3,6 +3,8 @@ from pytz import utc
 import logging
 import os
 
+from fasttext.FastText import _FastText
+
 import pandas as pd
 from dotenv import load_dotenv
 from aiogram import Bot, Dispatcher, executor, types, filters
@@ -65,6 +67,17 @@ class FSMSendForAll(StatesGroup):
 
 class FSMQuery(StatesGroup):
     execute_query = State()
+
+
+# Определяем язык текста
+def define_language(string: str) -> str:
+    model = _FastText(model_path='lid.176.ftz')
+    leng = model.predict(string, k=1)[0][0]
+    probability = model.predict(string, k=1)[1][0]
+    leng = leng.replace('__label__','')
+    if probability < 0.3 or leng not in ('en','ru','fr','de','es','ja','pt','zh','it','fa','ar','pl','nl','uk','he','id','tr','cs','sv','vi','ko','ca','fi','hu','th','no','bn','el','hi','ro','sr','bg','da','eu','et','az','ms','uz','sk','hy','hr','kk','sl','lt','lv','ka','is'):
+        leng = 'en'
+    return leng
 
 
 users_info = [] # список пользователей с инфомрацией
@@ -140,22 +153,55 @@ def inline_buttons_reminder(user_language: str):
     ib_reminder.row(b7, b2)
     return ib_reminder
 
-def inline_buttons_word_options(user_language: str):
+def inline_buttons_word_options(user_language: str, sl: str =None, tl: str =None, text_s: str =None, text_t: str =None):
     ib_word_options = types.InlineKeyboardMarkup(row_width=2)
     b1 = types.InlineKeyboardButton(text=message_texts.KB_WORD_OPTIONS_DELETE[user_language], callback_data='delete')
-    b2 = types.InlineKeyboardButton(text=message_texts.KB_WORD_OPTIONS_BACK[user_language], callback_data='back')
+    b2 = types.InlineKeyboardButton(text=message_texts.KB_WORD_OPTIONS_GO_TO_GOOGLETRANS[user_language], callback_data='google translate')
+    b3 = types.InlineKeyboardButton(text=message_texts.KB_WORD_OPTIONS_BACK[user_language], callback_data='back')
+    b4 = types.InlineKeyboardButton(text=message_texts.KB_CARDS_SHOW_CANCEL[user_language], callback_data='cancel')
 
-    ib_word_options.add(b1)
-    ib_word_options.row(b2)
+    if sl and tl and text_s and text_t:
+        ib_word_options.add(b1)
+        ib_word_options.row(b2)
+        ib_word_options.row(b3, b4)
+    else:
+        ib_word_options.add(b1)
+        ib_word_options.row(b3, b4)
     return ib_word_options
+
+def inline_buttons_google_translate(user_language: str, sl: str =None, tl: str =None, text_s: str =None, text_t: str =None):
+    ib_google_translate = types.InlineKeyboardMarkup(row_width=2)
+
+    text = message_texts.KB_WORD_OPTIONS_GO_TO_GOOGLETRANS_TRANS[user_language]
+    if len(text_s) >= 15:
+        button_text_s = text + text_s[:15] + '...'
+    else:
+        button_text_s = text + text_s
+
+    if len(text_t) >= 15:
+        button_text_t = text + text_t[:15] + '...'
+    else:
+        button_text_t = text + text_t
+
+    b1 = types.InlineKeyboardButton(text=button_text_s, url=message_texts.GOOGLETRANS_LINK.format(sl=sl, tl=tl, text=text_s))
+    b2 = types.InlineKeyboardButton(text=button_text_t, url=message_texts.GOOGLETRANS_LINK.format(sl=tl, tl=sl, text=text_t))
+    b3 = types.InlineKeyboardButton(text=message_texts.KB_WORD_OPTIONS_BACK[user_language], callback_data='back')
+    b4 = types.InlineKeyboardButton(text=message_texts.KB_CARDS_SHOW_CANCEL[user_language], callback_data='cancel')
+
+    ib_google_translate.add(b1)
+    ib_google_translate.row(b2)
+    ib_google_translate.row(b3, b4)
+    return ib_google_translate
+
 
 def inline_buttons_word_delete(user_language: str):
     ib_word_delete = types.InlineKeyboardMarkup(row_width=2)
     b1 = types.InlineKeyboardButton(text=message_texts.KB_CARD_OPTIONS_DELETED_SURE[user_language], callback_data='delete_word')
     b2 = types.InlineKeyboardButton(text=message_texts.KB_CARD_OPTIONS_DELETE_BACK[user_language], callback_data='options')
+    b3 = types.InlineKeyboardButton(text=message_texts.KB_CARDS_SHOW_CANCEL[user_language], callback_data='cancel')
 
     ib_word_delete.add(b1)
-    ib_word_delete.row(b2)
+    ib_word_delete.row(b2, b3)
     return ib_word_delete
 
 # Загружаем слова из CSV
@@ -1151,18 +1197,44 @@ async def next_cards(callback_query: types.CallbackQuery, user_language: str, st
 # Ответ на колбэк - Параметры слова
 @dp.callback_query_handler(filters.Text(contains=['options']), state=FSMCard.word_for_reminder) 
 @users_access
-async def next_cards(callback_query: types.CallbackQuery, user_language: str, state: FSMContext, *args, **kwargs):
+async def word_option(callback_query: types.CallbackQuery, user_language: str, state: FSMContext, *args, **kwargs):
 
     async with state.proxy() as data:
         users_cards = data['word_for_reminder']['users_cards']
         index_num = data['word_for_reminder']['index_num']
         user_id = callback_query.from_user.id
 
-        await callback_query.message.edit_reply_markup(reply_markup=inline_buttons_word_options(user_language))
+        text_s = users_cards[index_num][1]
+        text_t = users_cards[index_num][2]
+        sl = define_language(text_s)
+        tl = define_language(text_t)
+        
+        await callback_query.message.edit_reply_markup(reply_markup=inline_buttons_word_options(user_language, sl, tl, text_s, text_t))
         await callback_query.answer() # завершаем коллбэк
         # events
         logging.info(f'Переход в параметры слова из карточек | {user_id=}, {time.asctime()}')
         await event_recording(user_id=user_id, word_id=users_cards[index_num][0], event='word_options')
+
+# Ответ на колбэк - Параметры слова
+@dp.callback_query_handler(filters.Text(contains=['google translate']), state=FSMCard.word_for_reminder) 
+@users_access
+async def google_translate(callback_query: types.CallbackQuery, user_language: str, state: FSMContext, *args, **kwargs):
+
+    async with state.proxy() as data:
+        users_cards = data['word_for_reminder']['users_cards']
+        index_num = data['word_for_reminder']['index_num']
+        user_id = callback_query.from_user.id
+
+        text_s = users_cards[index_num][1]
+        text_t = users_cards[index_num][2]
+        sl = define_language(text_s)
+        tl = define_language(text_t)
+
+        await callback_query.message.edit_reply_markup(reply_markup=inline_buttons_google_translate(user_language, sl, tl, text_s, text_t))
+        await callback_query.answer() # завершаем коллбэк
+        # events
+        logging.info(f'Перевод слова | {user_id=}, {time.asctime()}')
+        await event_recording(user_id=user_id, word_id=users_cards[index_num][0], event='google_translate')
 
 
 # Ответ на колбэк - Параметры слова - УДАЛИТЬ?

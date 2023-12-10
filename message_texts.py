@@ -694,8 +694,8 @@ KB_CARDS_SHOW_TRANSLATION = {
     ,'RU':"Показать перевод"
 }
 KB_CARDS_SHOW_CANCEL = {
-    'EN':"Cancel"
-    ,'RU':"Отмена"
+    'EN':"Turn off the mode"
+    ,'RU':"Выйти из режима"
 }
 KB_CARDS_SHOW_OPTIONS = {
     'EN':"Options"
@@ -708,15 +708,26 @@ KB_WORD_OPTIONS_DELETE = {
 }
 KB_WORD_OPTIONS_BACK = {
     'EN':"Back to cards"
-    ,'RU':"Вернуться назад"
+    ,'RU':"Вернуться к карточке"
 }
+KB_WORD_OPTIONS_GO_TO_GOOGLETRANS = {
+    'EN':"Open in Google Translate"
+    ,'RU':"Открыть в Google Translate"
+}
+GOOGLETRANS_LINK = """https://translate.google.com/?hl=en&sl={sl}&tl={tl}&text={text}&op=translate"""
+
+KB_WORD_OPTIONS_GO_TO_GOOGLETRANS_TRANS = {
+    'EN':"Translate: "
+    ,'RU':"Перевести: "
+}
+
 KB_CARD_OPTIONS_DELETED_SURE = {
     'EN':"Yes, delete this word"
     ,'RU':"Да, удали это слово"
 }
 KB_CARD_OPTIONS_DELETE_BACK = {
     'EN':"Back to options"
-    ,'RU':"Вернуться назад"
+    ,'RU':"Вернуться к параметрам"
 }
 WORD_OPTIONS_DELETED = {
     'EN':"(deleted)"
