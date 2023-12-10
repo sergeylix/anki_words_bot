@@ -2,6 +2,7 @@ import time
 from pytz import utc
 import logging
 import os
+import urllib.parse
 
 from fasttext.FastText import _FastText
 
@@ -182,6 +183,9 @@ def inline_buttons_google_translate(user_language: str, sl: str =None, tl: str =
         button_text_t = text + text_t[:15] + '...'
     else:
         button_text_t = text + text_t
+    
+    text_s = urllib.parse.quote(text_s)
+    text_t = urllib.parse.quote(text_t)
 
     b1 = types.InlineKeyboardButton(text=button_text_s, url=message_texts.GOOGLETRANS_LINK.format(sl=sl, tl=tl, text=text_s))
     b2 = types.InlineKeyboardButton(text=button_text_t, url=message_texts.GOOGLETRANS_LINK.format(sl=tl, tl=sl, text=text_t))
