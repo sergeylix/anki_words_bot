@@ -78,6 +78,7 @@ async def db_start():
                     next_reminder_interval INTEGER,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
                     reminder_date TIMESTAMP,
+                    update_date TIMESTAMP,
                     FOREIGN KEY (user_id) REFERENCES profile(user_id))"""
     cur.execute(query)
     db.commit()
@@ -348,7 +349,6 @@ async def del_basic_words(user_id: str):
 # Добавление слова
 async def insert_words(user_id: str, user_message: str):
     user_message = user_message.replace("\n"," ")
-    # words = [word.strip() for word in user_message.split('=', 1)]
     words = [word.strip() for word in user_message.split('=', 2)]
     if len(words) == 2:
         words.append('')
@@ -362,6 +362,15 @@ async def insert_words(user_id: str, user_message: str):
         cur.execute("INSERT INTO words(user_id, user_added_word, word, translation, reminder_date) VALUES(?, ?, ?, ?, ?)", (user_id, user_added_word, words[0], words[1], reminder_date))
     else:
         cur.execute("INSERT INTO words(user_id, user_added_word, word, translation, category, reminder_date) VALUES(?, ?, ?, ?, ?, ?)", (user_id, user_added_word, words[0], words[1], words[2], reminder_date))
+    db.commit()
+
+# Изменение слова
+async def edit_words(user_id: str, word_id: int, words: list):
+    update_date = datetime.utcnow()
+    if not words[2]:
+        cur.execute("UPDATE words SET word = ?, translation = ?, update_date = ? WHERE user_id = ? AND word_id = ?;", (words[0], words[1], update_date, user_id, word_id))
+    else:
+        cur.execute("UPDATE words SET word = ?, translation = ?, category = ?, update_date = ? WHERE user_id = ? AND word_id = ?;", (words[0], words[1], words[2], update_date, user_id, word_id))
     db.commit()
 
 

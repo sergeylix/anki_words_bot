@@ -58,7 +58,7 @@ EXAMPLE: <b>buenos días = good morning</b>\n
 EXAMPLE: <b>contento = glad = feelings</b>\n
 🚀 To repeat the added words use the cards mode: /cards
 
-💬 If you have any questions about the bot, you can contact us here — @Sergeylih 🦄
+💬 If you have any questions, you can contact us here — @Sergeylih 🦄
 
 🤖 All commands: /commands"""
 
@@ -700,6 +700,31 @@ KB_CARDS_SHOW_CANCEL = {
 KB_CARDS_SHOW_OPTIONS = {
     'EN':"Options"
     ,'RU':"Параметры"
+}
+
+KB_WORD_OPTIONS_EDIT = {
+    'EN':"Edit this word"
+    ,'RU':"Изменить написание слова"
+}
+EDITING = {
+    'EN':"Editing...\n\n"
+    ,'RU':"Исправление слова...\n\n"
+}
+KB_CARD_OPTIONS_EDITING = {
+    'EN':"\n\n<b>✍️ Write the corrected word.</b>\nFormat: <code>[word] = [translation]</code>"
+    ,'RU':"\n\n<b>✍️ Напиши, на что заменить это слово.</b>\nФормат: <code>[слово] = [перевод]</code>"
+}
+KB_CARD_OPTIONS_EDITING_CHECK = {
+    'EN':"Edit from\n<code>{previous_word}</code>\nto\n<code>{new_word}</code>\n?"
+    ,'RU':"Исправить\n<code>{previous_word}</code>\nна\n<code>{new_word}</code>\n?"
+}
+KB_CARD_OPTIONS_EDITING_YES = {
+    'EN':"Yes"
+    ,'RU':"Да"
+}
+KB_CARD_OPTIONS_EDITING_NO = {
+    'EN':"No"
+    ,'RU':"Нет"
 }
 
 KB_WORD_OPTIONS_DELETE = {
