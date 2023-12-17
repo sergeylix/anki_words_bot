@@ -193,7 +193,7 @@ def inline_buttons_google_translate(user_language: str, sl: str =None, tl: str =
 
     b1 = types.InlineKeyboardButton(text=button_text_s, url=message_texts.GOOGLETRANS_LINK.format(sl=sl, tl=tl, text=text_s))
     b2 = types.InlineKeyboardButton(text=button_text_t, url=message_texts.GOOGLETRANS_LINK.format(sl=tl, tl=sl, text=text_t))
-    b3 = types.InlineKeyboardButton(text=message_texts.KB_WORD_OPTIONS_BACK[user_language], callback_data='back')
+    b3 = types.InlineKeyboardButton(text=message_texts.KB_CARDS_BACK_TO_OPTIONS[user_language], callback_data='options')
     b4 = types.InlineKeyboardButton(text=message_texts.KB_CARDS_SHOW_CANCEL[user_language], callback_data='cancel')
 
     ib_google_translate.add(b1)
@@ -204,7 +204,7 @@ def inline_buttons_google_translate(user_language: str, sl: str =None, tl: str =
 
 def inline_buttons_word_edit(user_language: str):
     ib_word_edit = types.InlineKeyboardMarkup(row_width=1)
-    b1 = types.InlineKeyboardButton(text=message_texts.KB_CARD_OPTIONS_DELETE_BACK[user_language], callback_data='options')
+    b1 = types.InlineKeyboardButton(text=message_texts.KB_CARDS_BACK_TO_OPTIONS[user_language], callback_data='options')
     b2 = types.InlineKeyboardButton(text=message_texts.KB_CARDS_SHOW_CANCEL[user_language], callback_data='cancel')
 
     ib_word_edit.row(b1, b2)
@@ -221,7 +221,7 @@ def inline_buttons_word_edititing(user_language: str):
 def inline_buttons_word_delete(user_language: str):
     ib_word_delete = types.InlineKeyboardMarkup(row_width=2)
     b1 = types.InlineKeyboardButton(text=message_texts.KB_CARD_OPTIONS_DELETED_SURE[user_language], callback_data='delete_word')
-    b2 = types.InlineKeyboardButton(text=message_texts.KB_CARD_OPTIONS_DELETE_BACK[user_language], callback_data='options')
+    b2 = types.InlineKeyboardButton(text=message_texts.KB_CARDS_BACK_TO_OPTIONS[user_language], callback_data='options')
     b3 = types.InlineKeyboardButton(text=message_texts.KB_CARDS_SHOW_CANCEL[user_language], callback_data='cancel')
 
     ib_word_delete.add(b1)
@@ -615,10 +615,11 @@ async def cancel_handler(message: types.Message, user_language: str, state: FSMC
         return
     elif current_state in ['FSMDelete:word_for_delete','FSMDeleteAll:delete_all']:
         answer_message = message_texts.MSG_CANCEL_DELETE[user_language]
-    elif current_state == 'FSMCard:word_for_reminder':
+    elif current_state in ['FSMCard:word_for_reminder','FSMCard:edit_word']:
         async with state.proxy() as data: # достаем id чата и сообщения, чтобы скрыть инлайновую клавиатуру
-            chat_id = data['word_for_reminder']['chat_id']
-            message_id = data['word_for_reminder']['cards_send_message']['message_id']
+            d = str(current_state.split(':', 1)[1])
+            chat_id = data[d]['chat_id']
+            message_id = data[d]['cards_send_message']['message_id']
         await bot.edit_message_reply_markup(chat_id = chat_id, message_id = message_id, reply_markup = None) # удаляем инлайновую клавиатуру
         answer_message = message_texts.MSG_CANCEL_REMINDER[user_language]
     elif current_state == 'FSMCard:change_cards_group':
@@ -1380,7 +1381,7 @@ async def edited_word(callback_query: types.CallbackQuery, user_language: str, s
         cards_edited_message_id = cards_send_message['message_id']
 
         await edit_words(user_id, word_id, words)
-        cards_edited_message_text = users_cards[index_num][1] + " = " + users_cards[index_num][2]
+        cards_edited_message_text = users_cards[index_num][1] + " | " + users_cards[index_num][2]
         await bot.edit_message_text(text=cards_edited_message_text, chat_id=chat_id, message_id=cards_edited_message_id, parse_mode = 'HTML', reply_markup=inline_buttons_reminder(user_language))
         # events
         logging.info(f'Слово отредактировано | {user_id=}, {time.asctime()}')
@@ -1700,7 +1701,7 @@ async def donate_MSG_DONATE_USDC_ERC20_hendler(message: types.Message, *args, **
 
 
 # В остальных случаях базовй ответ
-@dp.message_handler()
+@dp.message_handler(state="*")
 @users_access
 async def echo(message: types.Message, user_language: str, *args, **kwargs):
     answer_message = message_texts.MSG_COMMAND_NOT_DEFINED[user_language]

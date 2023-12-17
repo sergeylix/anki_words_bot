@@ -715,8 +715,8 @@ KB_CARD_OPTIONS_EDITING = {
     ,'RU':"\n\n<b>✍️ Напиши, на что заменить это слово.</b>\nФормат: <code>[слово] = [перевод]</code>"
 }
 KB_CARD_OPTIONS_EDITING_CHECK = {
-    'EN':"Edit from\n<code>{previous_word}</code>\nto\n<code>{new_word}</code>\n?"
-    ,'RU':"Исправить\n<code>{previous_word}</code>\nна\n<code>{new_word}</code>\n?"
+    'EN':"<b>Edit from</b>\n<code>{previous_word}</code>\n<b>to</b>\n<code>{new_word}</code>\n<b>?</b>"
+    ,'RU':"<b>Исправить</b>\n<code>{previous_word}</code>\n<b>на</b>\n<code>{new_word}</code>\n<b>?</b>"
 }
 KB_CARD_OPTIONS_EDITING_YES = {
     'EN':"Yes"
@@ -735,6 +735,10 @@ KB_WORD_OPTIONS_BACK = {
     'EN':"Back to cards"
     ,'RU':"Вернуться к карточке"
 }
+KB_CARDS_BACK_TO_OPTIONS = {
+    'EN':"Back to options"
+    ,'RU':"Вернуться к параметрам"
+}
 KB_WORD_OPTIONS_GO_TO_GOOGLETRANS = {
     'EN':"Open in Google Translate"
     ,'RU':"Открыть в Google Translate"
@@ -749,10 +753,6 @@ KB_WORD_OPTIONS_GO_TO_GOOGLETRANS_TRANS = {
 KB_CARD_OPTIONS_DELETED_SURE = {
     'EN':"Yes, delete this word"
     ,'RU':"Да, удали это слово"
-}
-KB_CARD_OPTIONS_DELETE_BACK = {
-    'EN':"Back to options"
-    ,'RU':"Вернуться к параметрам"
 }
 WORD_OPTIONS_DELETED = {
     'EN':"(deleted)"
